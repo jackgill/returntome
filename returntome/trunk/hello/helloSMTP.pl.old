@@ -1,0 +1,24 @@
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+
+use Net::SMTP::TLS;
+my $mailer;
+
+if (not $mailer = new Net::SMTP::TLS(
+        'smtp.gmail.com',
+#        Hello   =>      'some.host.name',
+        Port    =>      465, #redundant
+        User    =>      'return.to.me.test@gmail.com',
+	 Debug => 1,
+	 Password=>      'return2me')) {
+    die "Could not connect to server!\n";
+}
+print "foo\n";
+ $mailer->mail('return.to.me.test@gmail.com');
+ $mailer->to('letothefirst1@yahoo.com');
+ $mailer->data;
+ $mailer->datasend("Sent thru TLS!");
+ $mailer->dataend;
+ $mailer->quit;

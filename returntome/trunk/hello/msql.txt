@@ -1,0 +1,11 @@
+mysql -h localhost -u root -p
+Enter password: foo
+CREATE DATABASE Roster;
+SHOW DATABASES;
+USE Roster;
+CREATE TABLE RogueSquadron (firstName VARCHAR(20),lastName VARCHAR(20), rank VARCHAR(20));
+SHOW TABLES;
+DESCRIBE RogueSquadron;
+INSERT INTO RogueSquadron VALUES ('Wedge','Antilles','Commander');
+INSERT INTO RogueSquadron VALUES ('Wes','Janson','Lieutenant');
+SELECT * FROM RogueSquadron;

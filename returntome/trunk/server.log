@@ -1,0 +1,77 @@
+[13 Jul 2009 00:03:18,787] main: INFO: Checked incoming. 
+[13 Jul 2009 00:03:20,906] main: INFO: Retrieved 0 messages from SMTP server 
+[13 Jul 2009 00:03:20,907] main: INFO: Checked outgoing. 
+[13 Jul 2009 00:03:50,910] main: INFO: Checked incoming. 
+[13 Jul 2009 00:03:57,222] main: INFO: Retrieved 1 messages from SMTP server 
+[13 Jul 2009 00:03:57,224] R2M::ParseMail: DEBUG: Raw Message 000000000: 
+[13 Jul 2009 00:03:57,224] R2M::ParseMail: DEBUG: Delivered-To: return.to.me.test@gmail.com
+Received: by 10.216.15.75 with SMTP id e53cs118738wee;
+        Sun, 12 Jul 2009 23:03:27 -0700 (PDT)
+Received: by 10.114.185.12 with SMTP id i12mr8138510waf.123.1247465006357;
+        Sun, 12 Jul 2009 23:03:26 -0700 (PDT)
+Return-Path: <return.to.me.receive@gmail.com>
+Received: from mail-px0-f204.google.com (mail-px0-f204.google.com [209.85.216.204])
+        by mx.google.com with ESMTP id 11si7502554pxi.85.2009.07.12.23.03.24;
+        Sun, 12 Jul 2009 23:03:25 -0700 (PDT)
+Received-SPF: pass (google.com: domain of return.to.me.receive@gmail.com designates 209.85.216.204 as permitted sender) client-ip=209.85.216.204;
+Authentication-Results: mx.google.com; spf=pass (google.com: domain of return.to.me.receive@gmail.com designates 209.85.216.204 as permitted sender) smtp.mail=return.to.me.receive@gmail.com; dkim=pass (test mode) header.i=@gmail.com
+Received: by mail-px0-f204.google.com with SMTP id 42so1580979pxi.24
+        for <return.to.me.test@gmail.com>; Sun, 12 Jul 2009 23:03:24 -0700 (PDT)
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;
+        d=gmail.com; s=gamma;
+        h=domainkey-signature:received:received:message-id:date:from:to
+         :subject;
+        bh=JC+uzsb8L0coAbE9GWRrFy0o1SE2/jKPJqcQfIJD49E=;
+        b=KEmCs2i45YJnOpye6OZXAppFRcQU9TOaKPxay51JyLhb2KK4oRLQ/1aA4RcJlf2vrQ
+         U2CJSko//cz4b6FTNe8O/eis6Oe3+gdP9y+d3oGcHBIqv+YfnvtKDIm8TNybq9jQHiVh
+         rIfYrS83ymi2D/Ka95lT4SQKuBbRqA+2aZyA4=
+DomainKey-Signature: a=rsa-sha1; c=nofws;
+        d=gmail.com; s=gamma;
+        h=message-id:date:from:to:subject;
+        b=n9uws+atgbUvPgwEMseo6N1ph8L0jf8os2ByMNP3ZaY4febl8I77IWkaeBt3BNGa36
+         y9rKZT04eMLNX3F/B1mvBhKfwmgThnI/39pcjvJ8DwauWtBGyanlWgtB9DZC3qL0bTfq
+         e+ArXQnyxDat9IwCkuYiKlqRnP6QCgq/ZYgv0=
+Received: by 10.143.163.12 with SMTP id q12mr1173569wfo.125.1247465004392;
+        Sun, 12 Jul 2009 23:03:24 -0700 (PDT)
+Return-Path: <return.to.me.receive@gmail.com>
+Received: from localhost.localdomain (c-67-166-29-46.hsd1.co.comcast.net [67.166.29.46])
+        by mx.google.com with ESMTPS id 28sm7945214wfg.5.2009.07.12.23.03.23
+        (version=SSLv3 cipher=RC4-MD5);
+        Sun, 12 Jul 2009 23:03:23 -0700 (PDT)
+Message-ID: <4a5ace2b.1c078e0a.4f0b.ffffbef6@mx.google.com>
+Date: Sun, 12 Jul 2009 23:03:23 -0700 (PDT)
+From: return.to.me.receive@gmail.com
+To: return.to.me.test@gmail.com
+Subject: subject
+
+R2M: 2009-07-13T00:05:10
+ body
+ 
+[13 Jul 2009 00:03:57,227] R2M::ParseMail: DEBUG: Extracted Message: 
+[13 Jul 2009 00:03:57,229] R2M::ParseMail: DEBUG: %message = (
+             'body' => '
+ body
+',
+             'uid' => '000000000',
+             'subject' => 'subject',
+             'from' => 'return.to.me.receive@gmail.com'
+           );
+ 
+[13 Jul 2009 00:03:57,230] R2M::ParseMail: DEBUG: Instructions 
+[13 Jul 2009 00:03:57,230] R2M::ParseMail: DEBUG:  2009-07-13T00:05:10 
+[13 Jul 2009 00:03:57,364] main: INFO: Return-when: 
+[13 Jul 2009 00:03:57,365] main: INFO: 000000000  2009071300:05:10
+ 
+[13 Jul 2009 00:03:57,469] main: INFO: Stored message 000000000 in database 
+[13 Jul 2009 00:03:57,469] main: INFO: Checked outgoing. 
+[13 Jul 2009 00:04:27,491] main: INFO: Checked incoming. 
+[13 Jul 2009 00:04:29,278] main: INFO: Retrieved 0 messages from SMTP server 
+[13 Jul 2009 00:04:29,279] main: INFO: Checked outgoing. 
+[13 Jul 2009 00:04:59,287] main: INFO: Checked incoming. 
+[13 Jul 2009 00:05:00,595] main: INFO: Retrieved 0 messages from SMTP server 
+[13 Jul 2009 00:05:00,596] main: INFO: Checked outgoing. 
+[13 Jul 2009 00:05:30,601] main: INFO: Checked incoming. 
+[13 Jul 2009 00:05:33,877] main: INFO: Retrieved 0 messages from SMTP server 
+[13 Jul 2009 00:05:33,877] main: INFO: Checked outgoing. 
+[13 Jul 2009 00:05:33,882] main: INFO: Retrieved message 000000000 from database 
+[13 Jul 2009 00:05:36,542] main: INFO: Sent message  
