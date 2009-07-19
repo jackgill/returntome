@@ -1,74 +1,57 @@
-[14 Jul 2009 18:53:50,307] main: INFO: Checking incoming... 
-[14 Jul 2009 18:53:50,336] main: INFO: Retrieved 2 messages from SMTP server 
-[14 Jul 2009 18:53:50,339] R2M::ParseMail: DEBUG: Extracted Message: 
-[14 Jul 2009 18:53:50,353] R2M::ParseMail: DEBUG: %message = (
+[19 Jul 2009 02:28:04,701] main: INFO:  
+[19 Jul 2009 02:28:04,705] main: INFO: Checking incoming... 
+[19 Jul 2009 02:28:04,807] main: INFO: Retrieved 2 messages from IMAP server 
+[19 Jul 2009 02:28:04,932] main: INFO: Return date for message 000000000: 02:29:59 07-19-2009 
+[19 Jul 2009 02:28:04,965] main: INFO: Return date for message 000000001: 02:29:11 07-19-2009 
+[19 Jul 2009 02:28:04,975] main: INFO:  
+[19 Jul 2009 02:28:04,975] main: INFO: Checking outgoing... 
+[19 Jul 2009 02:28:04,979] main: INFO: Sent 0 messages to SMTP server 
+[19 Jul 2009 02:28:34,981] main: INFO:  
+[19 Jul 2009 02:28:34,981] main: INFO: Checking incoming... 
+[19 Jul 2009 02:28:34,987] main: INFO: Retrieved 2 messages from IMAP server 
+[19 Jul 2009 02:28:35,009] main: INFO: Return date for message 000000002: 02:29:49 07-19-2009 
+[19 Jul 2009 02:28:35,025] main: INFO: Return date for message 000000003: 02:28:36 07-19-2009 
+[19 Jul 2009 02:28:35,029] main: INFO:  
+[19 Jul 2009 02:28:35,029] main: INFO: Checking outgoing... 
+[19 Jul 2009 02:28:35,033] main: INFO: Sent 0 messages to SMTP server 
+[19 Jul 2009 02:29:05,034] main: INFO:  
+[19 Jul 2009 02:29:05,034] main: INFO: Checking incoming... 
+[19 Jul 2009 02:29:05,039] main: INFO: Retrieved 2 messages from IMAP server 
+[19 Jul 2009 02:29:05,055] main: INFO: Return date for message 000000004: 02:30:57 07-19-2009 
+[19 Jul 2009 02:29:05,071] main: INFO: Return date for message 000000005: 02:29:45 07-19-2009 
+[19 Jul 2009 02:29:05,074] main: INFO:  
+[19 Jul 2009 02:29:05,074] main: INFO: Checking outgoing... 
+[19 Jul 2009 02:29:05,077] main: INFO: Marked message 000000003 for retrieval 
+[19 Jul 2009 02:29:05,079] main: INFO: Sent 1 messages to SMTP server 
+[19 Jul 2009 02:29:05,081] R2M::Test: INFO: Called &sendMessages with: 
+[19 Jul 2009 02:29:05,081] R2M::Test: INFO: 	$from = return.to.me.test@gmail.com 
+[19 Jul 2009 02:29:05,081] R2M::Test: INFO: 	$password = return2me 
+[19 Jul 2009 02:29:05,083] R2M::Test: INFO: %message = (
              'body' => 'This is a multi-part message in MIME format.
 
---_----------=_124761923058320
+--_----------=_1247992114152813
 Content-Disposition: inline
 Content-Length: 41
 Content-Transfer-Encoding: binary
 Content-Type: text/plain
 
-R2M: 2009-07-14T18:55:11 
-body 000000000
---_----------=_124761923058320
+R2M: 02:28:36 07-19-2009
+body of message
+--_----------=_1247992114152813
 Content-Disposition: inline
 Content-Length: 49
 Content-Transfer-Encoding: binary
 Content-Type: text/html
 
-<br>R2M: 2009-07-14T18:55:11 
-body 000000000<br>
---_----------=_124761923058320--
-
-',
-             'uid' => '000000002',
-             'subject' => 'subject 000000000',
-             'from' => 'return.to.me.receive@gmail.com'
-           );
- 
-[14 Jul 2009 18:53:50,353] R2M::ParseMail: DEBUG: Instructions 
-[14 Jul 2009 18:53:50,354] R2M::ParseMail: DEBUG: NONE 
-[14 Jul 2009 18:53:50,354] main: INFO: Return-when: 
-[14 Jul 2009 18:53:50,354] main: INFO: 000000002  NONE
- 
-[14 Jul 2009 18:53:50,354] main: INFO: Message 000000002 had no readable date. 
-[14 Jul 2009 18:53:50,377] R2M::ParseMail: DEBUG: Extracted Message: 
-[14 Jul 2009 18:53:50,379] R2M::ParseMail: DEBUG: %message = (
-             'body' => 'This is a multi-part message in MIME format.
-
---_----------=_124761923058321
-Content-Disposition: inline
-Content-Length: 41
-Content-Transfer-Encoding: binary
-Content-Type: text/plain
-
-R2M: 2009-07-14T18:55:00 
-body 000000001
---_----------=_124761923058321
-Content-Disposition: inline
-Content-Length: 49
-Content-Transfer-Encoding: binary
-Content-Type: text/html
-
-<br>R2M: 2009-07-14T18:55:00 
-body 000000001<br>
---_----------=_124761923058321--
-
+<br>R2M: 02:28:36 07-19-2009
+body of message<br>
+--_----------=_1247992114152813--
 ',
              'uid' => '000000003',
-             'subject' => 'subject 000000001',
-             'from' => 'return.to.me.receive@gmail.com'
+             'subject' => 'subject line
+',
+             'address' => 'return.to.me.receive@gmail.com
+',
+             'return_time' => '1247992116'
            );
  
-[14 Jul 2009 18:53:50,379] R2M::ParseMail: DEBUG: Instructions 
-[14 Jul 2009 18:53:50,379] R2M::ParseMail: DEBUG: NONE 
-[14 Jul 2009 18:53:50,379] main: INFO: Return-when: 
-[14 Jul 2009 18:53:50,379] main: INFO: 000000003  NONE
- 
-[14 Jul 2009 18:53:50,380] main: INFO: Message 000000003 had no readable date. 
-[14 Jul 2009 18:53:50,386] main: INFO: Checking outgoing... 
-[14 Jul 2009 18:53:50,391] R2M::Test: INFO: Called &sendMessages with: 
-[14 Jul 2009 18:53:50,391] R2M::Test: INFO: 	$from = return.to.me.test@gmail.com 
-[14 Jul 2009 18:53:50,391] R2M::Test: INFO: 	$password = return2me 

@@ -5,10 +5,11 @@ use strict;
 
 use Exporter;
 use Data::Dumper::Simple;
-use Log::Log4perl;
-use Email::Simple;
+#use Log::Log4perl;
+#use Email::Simple;
 use MIME::Parser;
 use File::Path;
+use Date::Manip;
 
 our @ISA = ("Exporter");
 our @EXPORT = qw(&parseMail &getDate);
@@ -22,8 +23,6 @@ sub getDate {
 sub parseMail {
     my $raw_message = shift;
     my $uid = shift;
-    
-    my $logger = Log::Log4perl->get_logger();
     
     #parse the mail:
     my $parser = new MIME::Parser;
@@ -55,26 +54,22 @@ sub parseMail {
 
 
     rmtree("mimedump-tmp");
-    my $instructions = &parseText($text);
-    
+
+    my $return_time = &getReturnDate($text);
+
     #assemble the message
     my %message = (
-	from => $from,
+	address => $from,
 	subject => $subject,
 	body => $body,
 	uid => $uid,
+	return_time => $return_time,
 	);
-    
 
-    $logger->debug('Extracted Message:');
-    $logger->debug(Dumper(%message));
-    $logger->debug('Instructions');
-    $logger->debug($instructions);
-
-    return \%message,$instructions;
+    return \%message;
 }
 
-sub parseText {
+sub getReturnDate {
     my $text = shift;
 
     my @lines = split(/\r/,$text); #break it into lines
@@ -91,7 +86,15 @@ sub parseText {
 	 
     }
 
-    return $instructions;
+    return 'NONE' if ($instructions eq 'NONE');
+
+    my $date = ParseDate($instructions);
+    
+    return 'NONE' unless $date;
+    
+    my $secs = UnixDate($date,"%s");
+
+    return $secs;
 }
 
 1;

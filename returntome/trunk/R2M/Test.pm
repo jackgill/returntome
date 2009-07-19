@@ -8,10 +8,10 @@ use strict;
 use Exporter;
 use R2M::UID;
 use IO::Scalar;
-use Date::Manip;
 use Time::Piece;
 use MIME::Lite;
 use Data::Dumper::Simple;
+use DateTime;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(&createMessages &createMail &createReturnWhen &getMail &sendMessages);
@@ -29,16 +29,11 @@ sub sendMessages {
 	$logger->info(Dumper(%message));
     }
 }
-my $nGetMailCalls = 0;
+#my $nGetMailCalls = 0;
 sub getMail {
-    return () unless ($nGetMailCalls == 0);
-    my @uids;
-    for (my $i = 0; $i < 2; $i++) {
-	push @uids, &getUID;
-    }
-    my @messages = &createMessages(@uids);
-    my @mail = &createMail(@messages);
-    return @mail;
+#    return () unless ($nGetMailCalls == 0);
+     my @mail = &createMail(2);
+     return @mail;
 }
 sub createMessages {
     my @messages;
@@ -48,50 +43,39 @@ sub createMessages {
 	my $return_time = $now + $wait;
 	my $return_when =$return_time->datetime;
 	push @messages, {uid => $uid, 
-			 from => 'return.to.me.receive@gmail.com',
-			 subject => "subject $uid", 
-			 body => "R2M: $return_when \r\nbody $uid",
+			 address => 'return.to.me.receive@gmail.com',
+			 subject => "subject line", 
+			 body => "R2M: $return_when \r\nbody of message",
 	};
     }
     return @messages;
 }
 
 sub createMail {
+    my $nMail = shift;
     my @mail;
-    for (@_) {
-	my %message = %$_;
+    for (my $i = 0; $i < $nMail; $i++) {
+	my $return_time = time + int(rand(2 * 60));
+	my $dt = DateTime->from_epoch( epoch => $return_time, time_zone => 'America/Denver');
+	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\r\nbody of message";
 	my $msg = MIME::Lite->new(
-	    From    => $message{'from'},
+	    From    => 'return.to.me.receive@gmail.com',
 	    To      => 'return.to.me.test@gmail.com',
-	    Subject => $message{'subject'},
+	    Subject => 'subject line',
 	    Type    => 'multipart/mixed',
 	    );
 	$msg->attach(
 	    Type     => 'text/plain',
-	    Data     => $message{'body'},
+	    Data     => $body,
 	    );
 	$msg->attach(
 	    Type => 'text/html',
-	    Data => '<br>' . $message{'body'} . '<br>',
+	    Data => '<br>' . $body . '<br>',
 	    );
 	push @mail, $msg->as_string;
     }
     return @mail;
 }
 
-sub createReturnWhen {
-    my $nMessages = 10;
-    open(OUT,">return-when.txt") or die "couldn't open return-when.txt for output.\n"; #in the future, open for appending    
-    printf OUT "%-9s  %-16s\n",'UID','Date'; #in the future, only print these once
-    printf OUT "%-9s  %-16s\n",'-'x9,'-'x16;
-    for (my $i = 0; $i < $nMessages; $i++) {
-	#some time in the next 5 min:
-	my $now_time = localtime;
-	my $return_time = $now_time + int(rand(5 * 60));
-	my $return_when = ParseDate($return_time->datetime);
-	print OUT &getUID,"  ",$return_when,"\n";
-    }
-    close OUT;
-}
 1;
 	
