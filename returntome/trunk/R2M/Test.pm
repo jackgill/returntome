@@ -77,5 +77,11 @@ sub createMail {
     return @mail;
 }
 
+sub printLine {
+    my $line = shift;
+    my @bytes = unpack("C*",$line);
+    print @bytes,"\n";
+}
+
 1;
 	

@@ -5,7 +5,7 @@ use strict;
 
 use Exporter;
 use Data::Dumper::Simple;
-#use Log::Log4perl;
+use Log::Log4perl;
 #use Email::Simple;
 use MIME::Parser;
 use File::Path;
@@ -23,6 +23,7 @@ sub getDate {
 sub parseMail {
     my $raw_message = shift;
     my $uid = shift;
+    
     
     #parse the mail:
     my $parser = new MIME::Parser;
@@ -72,22 +73,25 @@ sub parseMail {
 sub getReturnDate {
     my $text = shift;
 
+    my $logger = Log::Log4perl->get_logger();
+
     my @lines = split(/\r/,$text); #break it into lines
     my $instructions = 'NONE';
 
     #extract the instructions
     for my $line (@lines) {
-	#print $line;
-	if ($line =~ /^\s*(R2M|RETURNTOME):?/i) {
-	    $line =~ s/\n//; #be smarter about this and the above line
+	if ($line =~ /^(\s*(R2M|RETURNTOME):?)/i) {
 	    $instructions = $line;
-	    $instructions =~ s/^\s*(R2M|RETURNTOME):?//;
+	    $instructions =~ s/\n//;
+	    $instructions =~ s/$1//;
 	}
-	 
     }
-
-    return 'NONE' if ($instructions eq 'NONE');
-
+    if ($instructions eq 'NONE') {
+	$logger->info('Could not find instructions!');
+	return 'NONE'; 
+    } else {
+	$logger->info("Instructions: $instructions");
+    }
     my $date = ParseDate($instructions);
     
     return 'NONE' unless $date;
