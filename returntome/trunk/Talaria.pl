@@ -39,43 +39,51 @@ Log::Log4perl::init('conf/log4perl_talaria.conf');
 my $pid = fork;
 
 if ($pid > 0) { #CLI process
-    print "ReturnToMe server started.\n";
-    while (1) {
-	print "ReturnToMe>"; #display prompt
-	my $line = <STDIN>; #read prompt
-	#commands:
-	if ($line =~ /stop/) { #stop the daemon and exit
-	    kill 9, $pid; #kill the daemon
-	    die "ReturnToMe server stopped.\n";
-	}
-	elsif ($line =~ /info/) {
+    #commands:
+    my %commands = (
+	info => sub {
 	    system 'cat talaria-info.log';
-	}
-	elsif ($line =~ /debug/) {
+	},
+	debug => sub {
 	    system 'cat talaria-debug.log';
-	}
-	elsif ($line =~/showdb/) {
-	    &showMessages;
-	}
-	elsif ($line =~/makedb/) {
-	    &makeTable;
-	}
-	elsif ($line =~ /time/) {
+	},
+	showdb => \&showMessages,
+	makedb => \&makeTable,
+	time => sub {
 	    my $dt = DateTime->from_epoch( epoch => time, time_zone => 'America/Denver');
 	    print $dt->hms . " " . $dt->mdy . "\n";
+	},
+	'\n' => sub {}, #TODO: this doesn't work
+	);
+    while (1) {
+	print "Talaria>"; #display prompt
+	chomp(my $line = <STDIN>); #read prompt
+	if ($line eq 'stop'){
+	    kill 9, $pid; #kill the daemon
+	    die "Talaria daemon stopped.\n";
 	}
-	elsif($line eq "\n") {
+	elsif ($commands{$line}) {
+	    eval { &{$commands{$line}} };
+	    warn "Error executing command: $@" if $@;
 	}
 	else {
 	    print "Unrecognized command\n";
 	}
-	#TODO: add help
     }
 } elsif ($pid == 0) { #daemon
+    my $logger = Log::Log4perl->get_logger();
+    #$logger->info("Started daemon");
+    print "Talaria daemon started.\n";
     while (1) {
 	sleep 60 if $debug;
-	&checkIncoming;
-	&checkOutgoing;
+	eval {&checkIncoming};
+        if ($@) {
+	    $logger->info("Error checking incoming: $@");
+	}
+	eval {&checkOutgoing};
+        if ($@) {
+	    $logger->info("Error checking outgoing: $@");
+	}
 	sleep 60;
     }
 } else {
