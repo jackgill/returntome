@@ -1,4 +1,4 @@
-package R2M::UID;
+package Mod::UID;
 
 use 5.010;
 

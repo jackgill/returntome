@@ -1,4 +1,4 @@
-package R2M::GetMail;
+package Mod::GetMail;
 
 use warnings;
 use strict;

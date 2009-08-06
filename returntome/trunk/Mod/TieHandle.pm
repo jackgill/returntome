@@ -1,4 +1,4 @@
-package R2M::TieHandle;
+package Mod::TieHandle;
 
 use 5.010;
 

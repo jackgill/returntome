@@ -5,7 +5,7 @@ use 5.010;
 use strict;
 use warnings;
 
-use R2M::SendMail;
+use Mod::SendMail;
 use Log::Log4perl;
 
 Log::Log4perl::init('log4perl_test.conf');

@@ -1,4 +1,4 @@
-package R2M::DB;
+package Mod::DB;
 
 use 5.010;
 
@@ -12,10 +12,25 @@ use DBI;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(&clearMessages &showMessages &getMessages &putMessages &getReturnTimes &makeTable);
 
-my $db = 'mysql:database=ReturnToMe';
-my $user = 'root';
-my $password = 'foo';
+
 my $sth;
+my %config;
+open(CONFIG,"<conf/db.conf") or die "Couldn't open conf/db.conf: $!\n";
+while (<CONFIG>) {
+    chomp;                  # no newline
+    s/#.*//;                # no comments
+    s/^\s+//;               # no leading white
+    s/\s+$//;               # no trailing white
+    next unless length;     # anything left?
+    my ($var, $value) = split(/\s*=\s*/, $_, 2);
+    $config{$var} = $value;
+}
+
+#check that these get set correctly!
+my $db = "mysql:database=" . $config{database};
+my $user = $config{username};
+my $password = $config{password};
+
 sub makeTable {
     my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
     

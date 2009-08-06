@@ -5,8 +5,8 @@ use warnings;
 
 use 5.010;
 
-use R2M::Test;
-use R2M::UID;
+use Mod::Test;
+use Mod::UID;
 use Data::Dumper::Simple;
 
 my @uids;

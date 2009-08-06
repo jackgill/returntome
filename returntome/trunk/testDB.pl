@@ -8,7 +8,7 @@ use warnings;
 use Data::Dumper::Simple;
 
 use lib '/home/jack/returntome/sandbox/Modules/';
-use R2M::DB;
+use Mod::DB;
 
 open;
 my %message = (

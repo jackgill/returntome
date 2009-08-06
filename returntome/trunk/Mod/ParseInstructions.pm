@@ -1,4 +1,4 @@
-package R2M::ParseInstructions;
+package Mod::ParseInstructions;
 
 use Exporter;
 

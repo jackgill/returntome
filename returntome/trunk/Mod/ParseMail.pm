@@ -1,4 +1,4 @@
-package R2M::ParseMail;
+package Mod::ParseMail;
 
 use warnings;
 use strict;

@@ -8,13 +8,13 @@ use 5.010;
 use Log::Log4perl;
 use File::Copy;
 
-use R2M::GetMail;
-use R2M::SendMail;
-#use R2M::Test;
-use R2M::ParseMail;
-use R2M::DB;
-use R2M::TieHandle;
-use R2M::UID;
+use Mod::GetMail;
+use Mod::SendMail;
+#use Mod::Test;
+use Mod::ParseMail;
+use Mod::DB;
+use Mod::TieHandle;
+use Mod::UID;
 
 use DateTime;
 
@@ -23,13 +23,14 @@ for (@ARGV) {
     $debug = 1 if ($_ eq '--debug');
 } 
 #clean up:
-unlink 'talaria.log';
+unlink 'talaria-info.log';
+unlink 'talaria-debug.log';
 &clearMessages;
 
 #initialize the logger:
 Log::Log4perl::init('conf/log4perl_talaria.conf');
-#tie(*STDERR, 'R2M::TieHandle');
-#tie(*STDOUT, 'R2M::TieHandle');
+#tie(*STDERR, 'Mod::TieHandle');
+#tie(*STDOUT, 'Mod::TieHandle');
 #TODO: capture STDERR
 
 #This server is implemented as 2 processes:
@@ -47,11 +48,11 @@ if ($pid > 0) { #CLI process
 	    kill 9, $pid; #kill the daemon
 	    die "ReturnToMe server stopped.\n";
 	}
-	elsif ($line =~ /logs/) {
-	    system 'cat server.log';
+	elsif ($line =~ /info/) {
+	    system 'cat talaria-info.log';
 	}
-	elsif ($line =~ /return-when/) {
-	    system 'cat return-when.txt';
+	elsif ($line =~ /debug/) {
+	    system 'cat talaria-debug.log';
 	}
 	elsif ($line =~/showdb/) {
 	    &showMessages;

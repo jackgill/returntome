@@ -1,4 +1,4 @@
-package R2M::Test;
+package Mod::Test;
 
 use 5.010;
 
@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use Exporter;
-use R2M::UID;
+use Mod::UID;
 use IO::Scalar;
 use Time::Piece;
 use MIME::Lite;
@@ -45,7 +45,7 @@ sub createMessages {
 	push @messages, {uid => $uid, 
 			 address => 'return.to.me.receive@gmail.com',
 			 subject => "subject line", 
-			 body => "R2M: $return_when \r\nbody of message",
+			 body => "Mod: $return_when \r\nbody of message",
 	};
     }
     return @messages;
@@ -57,7 +57,7 @@ sub createMail {
     for (my $i = 0; $i < $nMail; $i++) {
 	my $return_time = time + int(rand(2 * 60));
 	my $dt = DateTime->from_epoch( epoch => $return_time, time_zone => 'America/Denver');
-	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\r\nbody of message";
+	my $body = "Mod: " . $dt->hms . " " . $dt->mdy . "\r\nbody of message";
 	my $msg = MIME::Lite->new(
 	    From    => 'return.to.me.receive@gmail.com',
 	    To      => 'return.to.me.test@gmail.com',

@@ -1,4 +1,4 @@
-package R2M::SendMail;
+package Mod::SendMail;
 
 use warnings;
 use strict;

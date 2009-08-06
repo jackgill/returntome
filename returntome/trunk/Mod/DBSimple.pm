@@ -1,4 +1,4 @@
-package R2M::DBSimple;
+package Mod::DBSimple;
 
 use strict;
 use warnings;
