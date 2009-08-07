@@ -13,10 +13,9 @@ our @EXPORT = qw(&getMail);
 
 sub getMail {
     #Login information:
+    my $server = shift;
     my $user = shift;
     my $pass = shift;
-    my $server = 'imap.gmail.com';
-
     
     #Create the IMAP client
     my $imap = Net::IMAP::Simple::SSL->new($server);

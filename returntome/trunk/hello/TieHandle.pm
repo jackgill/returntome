@@ -1,4 +1,4 @@
-package Mod::TieHandle;
+package TieHandle;
 
 use 5.010;
 
@@ -9,7 +9,7 @@ use warnings;
 
 #our @ISA = qw(Exporter);
 #our @EXPORT = qw();
-use Log::Log4perl;
+#use Log::Log4perl;
     
 sub TIEHANDLE {
     my $class = shift;
@@ -18,9 +18,9 @@ sub TIEHANDLE {
 
 sub PRINT {
     my $self = shift;
-    my $text = join '',@_;
-    my $logger = Log::Log4perl->get_logger();
-    $logger->info('STDERR: ' . $text);
+    #my $logger = Log::Log4perl->get_logger();
+    #$logger->info('STDERR: ' . chomp @_);
+    print "Tie: ",@_;
 }
 
 

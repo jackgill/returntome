@@ -11,6 +11,7 @@ our @ISA = ("Exporter");
 our @EXPORT = qw(&sendMessages);
 
 sub sendMessages {
+    my $server = shift;
     my $from = shift;
     my $password = shift;
     my @messages = @_;
@@ -21,7 +22,7 @@ sub sendMessages {
     my $error;
 
     #Connect to the SMTP server:
-    if (not $smtp = Net::SMTP::SSL->new('smtp.gmail.com', Port => 465, Debug => 1)) {
+    if (not $smtp = Net::SMTP::SSL->new($server, Port => 465, Debug => 1)) {
 	$error = "Could not connect to SMTP server";
     }
 

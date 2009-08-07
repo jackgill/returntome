@@ -18,25 +18,26 @@ use Mod::UID;
 
 use DateTime;
 
-my $debug = 0;
+my $start_daemon = 1;
 for (@ARGV) {
-    $debug = 1 if ($_ eq '--debug');
+    $start_daemon = 0 if ($_ eq '--no-daemon');
 } 
+
 #clean up:
 unlink 'talaria-info.log';
 unlink 'talaria-debug.log';
-&clearMessages;
+
 
 #initialize the logger:
 Log::Log4perl::init('conf/log4perl_talaria.conf');
-#tie(*STDERR, 'Mod::TieHandle');
-#tie(*STDOUT, 'Mod::TieHandle');
-#TODO: capture STDERR
+#Send STDERR to logger:
+tie(*STDERR, 'Mod::TieHandle');
 
-#This server is implemented as 2 processes:
+#This program is implemented as 2 processes:
 #The parent provides terminal I/O: CLI
 #The child does the work: daemon
-my $pid = fork;
+my $pid = 1;
+$pid = fork if $start_daemon;
 
 if ($pid > 0) { #CLI process
     #commands:
@@ -49,6 +50,7 @@ if ($pid > 0) { #CLI process
 	},
 	showdb => \&showMessages,
 	makedb => \&makeTable,
+	cleardb => \&clearMessages, 
 	time => sub {
 	    my $dt = DateTime->from_epoch( epoch => time, time_zone => 'America/Denver');
 	    print $dt->hms . " " . $dt->mdy . "\n";
@@ -72,10 +74,9 @@ if ($pid > 0) { #CLI process
     }
 } elsif ($pid == 0) { #daemon
     my $logger = Log::Log4perl->get_logger();
-    #$logger->info("Started daemon");
+    $logger->info("Started daemon");
     print "Talaria daemon started.\n";
     while (1) {
-	sleep 60 if $debug;
 	eval {&checkIncoming};
         if ($@) {
 	    $logger->info("Error checking incoming: $@");
@@ -98,7 +99,7 @@ sub checkIncoming {
     $logger->debug('');
     $logger->debug('Checking incoming...');
 
-    my @raw_messages = &getMail('return.to.me.test@gmail.com','return2me');
+    my @raw_messages = &getMail('imap.gmail.com','return.to.me.test@gmail.com','return2me');
     my @messages;
     my $nMessages = @raw_messages;
     if ($nMessages != 0) {
@@ -154,7 +155,7 @@ sub checkOutgoing {
     my $nMessages_to_send = @messages_to_send;
     
     if (@messages_to_send) {
-	&sendMessages('return.to.me.test@gmail.com','return2me',@messages_to_send);
+	&sendMessages('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages_to_send);
 	$logger->info("Sent $nMessages_to_send messages to SMTP server");
     } 
 }
