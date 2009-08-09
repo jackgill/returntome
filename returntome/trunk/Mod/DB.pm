@@ -10,7 +10,7 @@ use DBI;
 use Log::Log4perl;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &makeTables &clearMessages &showMessages &putMessages &getMessages &getMessagesToSend);
+our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend);
 use Carp;
 
 #Global variables...ugh
@@ -47,43 +47,32 @@ sub disconnect {
 sub sql {
     my $statement = shift;
     $logger->debug($statement);
-    $sth = $dbh->prepare($statement) or $logger->error("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-    $sth->execute() or $logger->error("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+    $sth = $dbh->prepare($statement) or $logger->error("Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
+    $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }
+
+#TODO: Pass this in as an argument?
+my @tables = ('ParsedMessages','UnparsedMessages','SentMessages','UnsentMessages');
 
 sub makeTables {
-    &sql("DROP TABLE Messages");
-    &sql("DROP TABLE SentMessages");
-    &sql("DROP TABLE UnsentMessages");
-
-    #TODO declare return_time as in integer with the appropriate length for epoch seconds
+    #TODO: declare return_time as in integer with the appropriate length for epoch seconds
     my $messages_schema = "(uid INTEGER(9) ZEROFILL, return_time VARCHAR(100),address VARCHAR(320),subject BLOB,body BLOB)";
-    &sql("CREATE TABLE Messages $messages_schema");
-    &sql("CREATE TABLE SentMessages $messages_schema");
-    &sql("CREATE TABLE UnsentMessages $messages_schema");
+    for my $table (@tables) {
+	&sql("DROP TABLE $table");
+	&sql("CREATE TABLE $table $messages_schema");
+    }
 }
-sub clearMessages {
-    &sql("DELETE FROM Messages");
-    &sql("DELETE FROM SentMessages");
-    &sql("DELETE FROM UnsentMessages");
+sub clearTables {
+    for my $table (@tables) {
+	&sql("DELETE FROM $table");
+    }
 }
 
-#sub getReturnTimes {
-#    $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
-#    $sth = $dbh->prepare("SELECT uid, return_time FROM Messages") or &prepError;
-#    $sth->execute() or &execError;    
-#    my @rows = @{ $sth->fetchall_arrayref };
-#    $dbh->disconnect;
-#    return @rows;
-#}
-
-sub showMessages {
-    print "Messages:\n";
-    &showTable('Messages');
-    print "Sent Messages:\n";
-    &showTable('SentMessages');
-    print "Unsent Messages:\n";
-    &showTable('UnsentMessages');
+sub showTables {
+    for my $table (@tables) {
+	print "$table:\n";
+	&showTable($table);
+    }
 }
 sub showTable {
     my $table = shift;
@@ -142,12 +131,11 @@ sub getMessages {
 }
 
 sub getMessagesToSend {
-    my $table = shift;
     my $return_time = shift;
 
     my @messages;
 
-    &sql("SELECT * FROM $table WHERE return_time < $return_time;");
+    &sql("SELECT * FROM ParsedMessages WHERE return_time < $return_time;");
     
     my @row;
     while (@row = $sth->fetchrow_array()) {
@@ -161,8 +149,9 @@ sub getMessagesToSend {
 	push @messages, \%message;
     }
     #delete the messages:
-    &sql("DELETE FROM $table WHERE return_time < $return_time;");
-    
+    &sql("DELETE FROM ParsedMessages WHERE return_time < $return_time;");
+    #TODO: Is there a more efficient way to do this?
+
     return @messages;
 }
 1;

@@ -8,9 +8,9 @@ use Data::Dumper::Simple;
 use Net::SMTP::SSL;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(&sendMessages);
+our @EXPORT = qw(&sendMail);
 
-sub sendMessages {
+sub sendMail {
     my $server = shift;
     my $from = shift;
     my $password = shift;

@@ -24,7 +24,7 @@ sub getMail {
     
     #Log in to the IMAP server
     unless ($imap->login($user => $pass)) {
-	$logger->info("Login failed: " . $imap->errstr);
+	$logger->error("Could not login to IMAP server: " . $imap->errstr);
 	return ();
     }
 
