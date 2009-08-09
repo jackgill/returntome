@@ -21,19 +21,33 @@ sub sendMessages {
     my $smtp;
     my $error;
 
+    #Return values:
+    my @unsent_messages;
+    my @sent_messages;
+
     #Connect to the SMTP server:
     if (not $smtp = Net::SMTP::SSL->new($server, Port => 465, Debug => 1)) {
 	$error = "Could not connect to SMTP server";
     }
 
+    if ($error) {
+	$logger->error($error);
+	my @uids;
+	return [],\@messages;
+    }
+
     #Authenticate to the SMTP server:
     $smtp->auth($from, $password) or $error = "Authentication failed";
 
-    #Handle errors:
+    #Return all messages if we couldn't connect or authenticate to the SMTP server:
+    #EVIL code dup!
     if ($error) {
 	$logger->error($error);
-	return @messages;
+	my @uids;
+	return [],\@messages;
     }
+
+
 
     #Send the messages
     for (@messages) {
@@ -42,21 +56,33 @@ sub sendMessages {
 	my $address = $message{'address'};
 	my $subject = $message{'subject'};
 	my $body = $message{'body'};
+	my $uid = $message{'uid'};
 
 	$logger->info("Sending message:");
 	$logger->info(Dumper(%message));
 
-	$smtp->mail($from . "\r\n");
-	$smtp->to($address . "\r\n");
+	#TODO: check return value on these?
+	$smtp->mail($from . "\n");
+	$smtp->to($address . "\n");
 	$smtp->data();
-	$smtp->datasend("From: " . $from . "\r\n");
-	$smtp->datasend("To: " . $address . "\r\n");
-	$smtp->datasend("Subject: " . $subject . "\r\n");
-	$smtp->datasend("\r\n");
-	$smtp->datasend($body . "\r\n");
+	#Gmail rewrites these headers anyway:
+#	$smtp->datasend("From: " . "ReturnToMe" . "\r");
+#	$smtp->datasend("To: " . $address . "\r");
+	$smtp->datasend("Subject: " . $subject . "\n");
+	$smtp->datasend("\n");
+	$smtp->datasend($body . "\n");
 	$smtp->dataend();
+	my $smtp_response = $smtp->message;
+	if ($smtp_response =~ /2.0.0 OK/) {
+	    push @sent_messages, \%message;
+	} else {
+	    $logger->info("Error sending message!");
+	    $logger->info($smtp_response);
+	    push @unsent_messages, \%message;
+	}
     }
     $smtp->quit;
+    return \@sent_messages,\@unsent_messages;
 }
 
 1;

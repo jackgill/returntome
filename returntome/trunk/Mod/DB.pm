@@ -6,59 +6,88 @@ use strict;
 use warnings;
 
 use Exporter;
-use Carp;
 use DBI;
+use Log::Log4perl;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&clearMessages &showMessages &getMessages &putMessages &getReturnTimes &makeTable);
+our @EXPORT = qw(&connect &disconnect &makeTables &clearMessages &showMessages &putMessages &getMessages &getMessagesToSend);
+use Carp;
 
+#Global variables...ugh
+my $sth; #DBI statement handle
+my $dbh; #DBI database handle
+my $logger = Log::Log4perl->get_logger();
 
-my $sth;
-my %config;
-open(CONFIG,"<conf/db.conf") or die "Couldn't open conf/db.conf: $!\n";
-while (<CONFIG>) {
-    chomp;                  # no newline
-    s/#.*//;                # no comments
-    s/^\s+//;               # no leading white
-    s/\s+$//;               # no trailing white
-    next unless length;     # anything left?
-    my ($var, $value) = split(/\s*=\s*/, $_, 2);
-    $config{$var} = $value;
+sub connect {
+    my %config; #stores config variables
+    #read config file:
+    open(CONFIG,"<conf/db.conf") or die "Couldn't open conf/db.conf: $!\n";
+    while (<CONFIG>) {
+	chomp;                  # no newline
+	s/#.*//;                # no comments
+	s/^\s+//;               # no leading white
+	s/\s+$//;               # no trailing white
+	next unless length;     # anything left?
+	my ($var, $value) = split(/\s*=\s*/, $_, 2);
+	$config{$var} = $value;
+    }
+    #TODO: check that these get set correctly!
+    my $db = "mysql:database=" . $config{database};
+    my $user = $config{username};
+    my $password = $config{password};
+    $dbh = DBI->connect("DBI:$db",$user,$password) or $logger->error("DB: Couldn't connect to database: " . DBI->errstr); 
+    $logger->debug("Connected to database.");
 }
 
-#check that these get set correctly!
-my $db = "mysql:database=" . $config{database};
-my $user = $config{username};
-my $password = $config{password};
-
-sub makeTable {
-    my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
-    
-    $sth = $dbh->prepare("DROP TABLE Messages") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-    $sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
-    #TODO declare return_time as in integer with the appropriate length for epoch seconds
-    $sth = $dbh->prepare("CREATE TABLE Messages (uid INTEGER(9) ZEROFILL, return_time VARCHAR(100),address VARCHAR(320),subject BLOB,body BLOB)") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr); 
-    $sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+sub disconnect {
     $dbh->disconnect;
+    $logger->debug("Disconnected from database.");
+}
+
+sub sql {
+    my $statement = shift;
+    $logger->debug($statement);
+    $sth = $dbh->prepare($statement) or $logger->error("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
+    $sth->execute() or $logger->error("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+}
+
+sub makeTables {
+    &sql("DROP TABLE Messages");
+    &sql("DROP TABLE SentMessages");
+    &sql("DROP TABLE UnsentMessages");
+
+    #TODO declare return_time as in integer with the appropriate length for epoch seconds
+    my $messages_schema = "(uid INTEGER(9) ZEROFILL, return_time VARCHAR(100),address VARCHAR(320),subject BLOB,body BLOB)";
+    &sql("CREATE TABLE Messages $messages_schema");
+    &sql("CREATE TABLE SentMessages $messages_schema");
+    &sql("CREATE TABLE UnsentMessages $messages_schema");
 }
 sub clearMessages {
-    my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
-    $sth = $dbh->prepare("DELETE FROM Messages") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-    $sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);    
-    $dbh->disconnect;
+    &sql("DELETE FROM Messages");
+    &sql("DELETE FROM SentMessages");
+    &sql("DELETE FROM UnsentMessages");
 }
-sub getReturnTimes {
-    my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
-    $sth = $dbh->prepare("SELECT uid, return_time FROM Messages") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-    $sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);    
-    my @rows = @{ $sth->fetchall_arrayref };
-    $dbh->disconnect;
-    return @rows;
-}
+
+#sub getReturnTimes {
+#    $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
+#    $sth = $dbh->prepare("SELECT uid, return_time FROM Messages") or &prepError;
+#    $sth->execute() or &execError;    
+#    my @rows = @{ $sth->fetchall_arrayref };
+#    $dbh->disconnect;
+#    return @rows;
+#}
+
 sub showMessages {
-    my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
-    $sth = $dbh->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = 'Messages'") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);  #this returns a table with one column. Each row is the name of a column in $table_name
-    $sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);    
+    print "Messages:\n";
+    &showTable('Messages');
+    print "Sent Messages:\n";
+    &showTable('SentMessages');
+    print "Unsent Messages:\n";
+    &showTable('UnsentMessages');
+}
+sub showTable {
+    my $table = shift;
+    &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table'");  #this returns a table with one column. Each row is the name of a column in $table_name
     my @col_refs = @{ $sth->fetchall_arrayref }; #this is an array of references to arrays
     my @col_names; #this will hold the names of the columns
     for my $col_ref (@col_refs) {
@@ -68,20 +97,18 @@ sub showMessages {
     }
     my $format = "%-20s | " x @col_names;
     printf $format,@col_names;
-    print "\n","-" x (33*@col_names),"\n";
+    print "\n","-" x (23*@col_names),"\n";
     
     #Now get the entire table:
-    $sth = $dbh->prepare("SELECT * FROM Messages") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-    $sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+    &sql("SELECT * FROM $table");
     my @row;
     while (@row = $sth->fetchrow_array()) {
 	printf $format,@row;
 	print "\n";
     }
-    $dbh->disconnect;
 }
 sub putMessages {
-    my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;
+    my $table = shift;
     for (@_) {
 	my %message = %$_;
 	my $uid = $message{'uid'};
@@ -89,19 +116,16 @@ sub putMessages {
 	my $address = $message{'address'};
 	my $subject = $message{'subject'};
 	my $body = $message{'body'};
-	$sth = $dbh->prepare("INSERT INTO Messages VALUES ('$uid','$return_time','$address','$subject','$body');") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-	$sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+	&sql("INSERT INTO $table VALUES ('$uid','$return_time','$address','$subject','$body');");
     }
-    $dbh->disconnect;
 }
 
 sub getMessages {
-    my $dbh = DBI->connect("DBI:$db",$user,$password) or croak "DB: Couldn't connect to database: " . DBI->errstr;    
+    my $table = shift;
+    my @uids = @_;
     my @messages;
-    for (@_) {
-	my $uid = $_;
-	$sth = $dbh->prepare("SELECT * FROM Messages WHERE UID = $uid;") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-	$sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+    for my $uid (@uids) {
+	&sql("SELECT * FROM $table WHERE UID = $uid;");
 	my @row = $sth->fetchrow_array();
 	my %message = (
 	    uid => $row[0],
@@ -112,11 +136,33 @@ sub getMessages {
 	);
 	push @messages, \%message;
 	#delete the message:
-	$sth = $dbh->prepare("DELETE FROM Messages WHERE UID = $uid;") or croak("DB: Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
-	$sth->execute() or croak("DB: Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
+	&sql("DELETE FROM $table WHERE UID = $uid;");
     }
-    $dbh->disconnect;
     return @messages;
 }
 
+sub getMessagesToSend {
+    my $table = shift;
+    my $return_time = shift;
+
+    my @messages;
+
+    &sql("SELECT * FROM $table WHERE return_time < $return_time;");
+    
+    my @row;
+    while (@row = $sth->fetchrow_array()) {
+	my %message = (
+	    uid => $row[0],
+	    return_time => $row[1],
+	    address => $row[2],
+	    subject => $row[3],
+	    body => $row[4],
+	    );
+	push @messages, \%message;
+    }
+    #delete the messages:
+    &sql("DELETE FROM $table WHERE return_time < $return_time;");
+    
+    return @messages;
+}
 1;

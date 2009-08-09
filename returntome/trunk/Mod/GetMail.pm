@@ -16,20 +16,25 @@ sub getMail {
     my $server = shift;
     my $user = shift;
     my $pass = shift;
+
+    my $logger = Log::Log4perl->get_logger();
     
     #Create the IMAP client
     my $imap = Net::IMAP::Simple::SSL->new($server);
     
     #Log in to the IMAP server
-    $imap->login($user => $pass) or die "Login failed: " . $imap->errstr . "\n";
-    
+    unless ($imap->login($user => $pass)) {
+	$logger->info("Login failed: " . $imap->errstr);
+	return ();
+    }
+
     #open the inbox
     my $nMessages = $imap->select('INBOX');
     unless ($nMessages) {
-	#my $logger = Log::Log4perl->get_logger();
 	#$logger->info("Couldn't open inbox");
 	return ();
     }
+
     my @raw_messages;
     for (my $iMessage = 1; $iMessage <= $nMessages; $iMessage++) {
 	my $message = $imap->get( $iMessage );
@@ -37,6 +42,7 @@ sub getMail {
 	my $raw_message = join '' , @$message;
 	push @raw_messages, $raw_message;
     }
+
     #close the IMAP client
     $imap->quit;
 

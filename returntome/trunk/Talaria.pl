@@ -33,6 +33,10 @@ Log::Log4perl::init('conf/log4perl_talaria.conf');
 #Send STDERR to logger:
 tie(*STDERR, 'Mod::TieHandle');
 
+#Connect to DB:
+&connect;
+&clearMessages;
+
 #This program is implemented as 2 processes:
 #The parent provides terminal I/O: CLI
 #The child does the work: daemon
@@ -40,6 +44,7 @@ my $pid = 1;
 $pid = fork if $start_daemon;
 
 if ($pid > 0) { #CLI process
+
     #commands:
     my %commands = (
 	info => sub {
@@ -49,20 +54,21 @@ if ($pid > 0) { #CLI process
 	    system 'cat talaria-debug.log';
 	},
 	showdb => \&showMessages,
-	makedb => \&makeTable,
+	makedb => \&makeTables,
 	cleardb => \&clearMessages, 
 	time => sub {
 	    my $dt = DateTime->from_epoch( epoch => time, time_zone => 'America/Denver');
 	    print $dt->hms . " " . $dt->mdy . "\n";
 	},
-	'\n' => sub {}, #TODO: this doesn't work
 	);
     while (1) {
 	print "Talaria>"; #display prompt
 	chomp(my $line = <STDIN>); #read prompt
 	if ($line eq 'stop'){
+	    &disconnect;
 	    kill 9, $pid; #kill the daemon
-	    die "Talaria daemon stopped.\n";
+	    print "Talaria daemon stopped.\n";
+	    exit 0;
 	}
 	elsif ($commands{$line}) {
 	    eval { &{$commands{$line}} };
@@ -125,7 +131,7 @@ sub checkIncoming {
 	    $logger->info($raw_message);
 	}
     }
-    &putMessages(@messages);
+    &putMessages('Messages',@messages);
 }
 
 sub checkOutgoing {
@@ -134,16 +140,7 @@ sub checkOutgoing {
     $logger->debug('Checking outgoing...');
 
     my $current_time = time;
-    my @uids_to_send;
-    my @return_times = &getReturnTimes;
-    for (@return_times) {
-	my ($uid, $return_time) = @$_;
-	if ($return_time < $current_time) {
-	    push @uids_to_send, $uid;
-	    $logger->info("Marked message $uid for retrieval");
-	}
-    }
-    my @messages_to_send = &getMessages(@uids_to_send);
+    my @messages_to_send = &getMessagesToSend('Messages',$current_time);
     for (@messages_to_send) {
 	my %message = %$_;
 	#my $uid = $message{'uid'};
@@ -155,7 +152,9 @@ sub checkOutgoing {
     my $nMessages_to_send = @messages_to_send;
     
     if (@messages_to_send) {
-	&sendMessages('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages_to_send);
+	my ($sent,$unsent) = &sendMessages('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages_to_send);
+	&putMessages('SentMessages',@$sent);
+	&putMessages('UnsentMessages',@$unsent);
 	$logger->info("Sent $nMessages_to_send messages to SMTP server");
     } 
 }
