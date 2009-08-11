@@ -18,7 +18,9 @@ sub TIEHANDLE {
 
 sub PRINT {
     my $self = shift;
-    my $text = join '',@_;
+    my @lines = @_;
+    chomp @lines;
+    my $text = join '',@lines;
     my $logger = Log::Log4perl->get_logger();
     $logger->info('STDERR: ' . $text);
 }

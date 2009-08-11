@@ -9,7 +9,7 @@ use warnings;
 
 #our @ISA = qw(Exporter);
 #our @EXPORT = qw();
-#use Log::Log4perl;
+use Log::Log4perl;
     
 sub TIEHANDLE {
     my $class = shift;
@@ -18,9 +18,11 @@ sub TIEHANDLE {
 
 sub PRINT {
     my $self = shift;
-    #my $logger = Log::Log4perl->get_logger();
-    #$logger->info('STDERR: ' . chomp @_);
-    print "Tie: ",@_;
+    my @lines = @_;
+    chomp @lines;
+    my $text = join '',@lines;
+    my $logger = Log::Log4perl->get_logger();
+    $logger->info('STDERR: ' . $text);
 }
 
 

@@ -25,7 +25,7 @@ for (my $i = 0; $i < $nMessages; $i++) {
     print "Return date for message $i: $return_when\n";
     push @messages, {uid => 'dummy', address => 'return.to.me.test@gmail.com',subject => "subject $i", body => "R2M: $return_when \r\nbody $i"};
 }
-&sendMessages('smtp.gmail.com','return.to.me.receive@gmail.com','return2me',@messages);
+&sendMail('smtp.gmail.com','return.to.me.receive@gmail.com','return2me',@messages);
 #exit 0;
 print "Waiting...\n";
 sleep 2 * 60 + 30;

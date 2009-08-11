@@ -21,6 +21,7 @@ use DateTime;
 my $start_daemon = 1;
 for (@ARGV) {
     $start_daemon = 0 if ($_ eq '--no-daemon');
+    &clearTables if ($_ eq '--clear-tables');
 } 
 
 #clean up:
@@ -35,7 +36,6 @@ tie(*STDERR, 'Mod::TieHandle');
 
 #Connect to DB:
 &connect;
-&clearTables; #TODO: probably don't want to do this in production
 
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
@@ -123,24 +123,13 @@ sub checkIncoming {
 	} else {
 	    $logger->info('Message ' . $message{'uid'} . ' had no readable date.');
 	    push @unparsed_messages, \%message;
-	    #TODO: send back an error email
-
 	}
     }
     &putMessages('ParsedMessages',@parsed_messages);
     &putMessages('UnparsedMessages',@unparsed_messages);
+    #If we couldn't parse the message, return it to sender:
+    &sendMessages(@unparsed_messages);
 
-    #If we couldn't parse the message, return it to sender, with an error message:
-    if (@unparsed_messages) {
-	for my $message (@unparsed_messages) {
-	    #TODO: This doesn't work:
-	    my $subject= $message{'subject'};
-	    $message{'subject'} = "Returned To You: $subject";
-	    my $body = $message{'body'};
-	    $message{'body'} = "Sorry, we couldn't parse this.\n$body";
-	}
-	&sendMessages(@unparsed_messages);
-    }
 }
 
 sub checkOutgoing {
@@ -149,25 +138,32 @@ sub checkOutgoing {
 
     my $current_time = time;
     my @messages_to_send = &getMessagesToSend($current_time);
+    my @messages;
     for (@messages_to_send) {
 	my %message = %$_;
 	my $uid = $message{'uid'};
 	$logger->info("Marked message $uid for sending.");
-	#TODO: subject isn't being altered
 	my $subject= $message{'subject'};
 	$message{'subject'} = "Returned To You: $subject";
+	push @messages, \%message; #KLUDGE
     }
-    my $nMessages_to_send = @messages_to_send;
-    
-    &sendMessages(@messages_to_send) if @messages_to_send;
+    &sendMessages(@messages);
 }
 
-sub sentMessages{
-    my @messages_to_send = @_;
-    my ($sent,$unsent) = &sendMail('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages_to_send);
-    &putMessages('SentMessages',@$sent);
-    &putMessages('UnsentMessages',@$unsent);
-    $logger->info("Sent $nMessages_to_send messages to SMTP server");
+sub sendMessages{
+    my @messages = @_;
+    return unless @messages;
+    my $nMessages = @messages;
+    $logger->info("Sent $nMessages messages to SMTP server...");    
+    my ($sent_ref,$unsent_ref) = &sendMail('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages);
+    my @sent = @$sent_ref;
+    my @unsent = @$unsent_ref;
+    my $nSent = @sent;
+    my $nUnsent = @unsent;
+    $logger->info("$nSent were sent successfully.");
+    $logger->info("$nUnsent weren't sent successfully.");
+    &putMessages('SentMessages',@sent);
+    &putMessages('UnsentMessages',@unsent);
 }
 
 sub fromEpoch {

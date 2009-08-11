@@ -47,9 +47,16 @@ $smtp->to($to . "\n");
 $smtp->data();
 $smtp->datasend($str);
 $smtp->dataend();
-$smtp->quit;
 
+my $smtp_response = $smtp->message;
+unless ($smtp_response =~ /2.0.0 OK/) {
+    die "Error: message not sent!";
+} 
+$smtp->quit;
 #clean up:
 unlink 'r2m.tar.gz';
 
-#TODO: check if message was sent sucessfully?
+#now update the subversion repository:
+system "svn commit -F trunk/commit.log";
+system "rm trunk/commit.log";
+system "touch trunk/commit.log";

@@ -14,6 +14,8 @@ use Date::Manip;
 our @ISA = ("Exporter");
 our @EXPORT = qw(&parseMail &getDate);
 
+my $logger = Log::Log4perl->get_logger();
+
 sub getDate {
     my $raw_message = shift;
     my $email = Email::Simple->new($raw_message);
@@ -37,6 +39,8 @@ sub parseMail {
     my $head = $entity->head;
     my $subject = $head->get('Subject',0);
     my $from = $head->get('From',0);
+    my $mime_version = $head->get('MIME-Version',0);
+    my $content_type = $head->get('Content-Type',0);
     my $body = join '', @{$entity->body}; #TO-DO check to see if this is unmodified by the parser
     my $text = 'none';
     if ($entity->is_multipart == 1) { #TO-DO check for undef case
@@ -57,11 +61,16 @@ sub parseMail {
     rmtree("mimedump-tmp");
 
     my $return_time = &getReturnDate($text);
+    
+    #TODO: error message should be in body, text/plain and text/html
+    if ($return_time eq 'NONE') {
+	$subject = "R2M: Could not parse: $subject";
+    }
 
     #assemble the message
     my %message = (
 	address => $from,
-	subject => $subject,
+	subject => $subject . "MIME-Version: $mime_version" . "Content-Type: $content_type", #KLUDGE
 	body => $body,
 	uid => $uid,
 	return_time => $return_time,
@@ -72,8 +81,6 @@ sub parseMail {
 
 sub getReturnDate {
     my $text = shift;
-
-    my $logger = Log::Log4perl->get_logger();
 
     my @lines = split(/\r/,$text); #break it into lines
     my $instructions = 'NONE';
