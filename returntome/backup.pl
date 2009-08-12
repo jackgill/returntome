@@ -49,9 +49,11 @@ $smtp->datasend($str);
 $smtp->dataend();
 
 my $smtp_response = $smtp->message;
-unless ($smtp_response =~ /2.0.0 OK/) {
-    die "Error: message not sent!";
-} 
+if ($smtp_response =~ /2.0.0 OK/) {
+    print "Backup email sent successfully.\n";
+} else {
+    print "Error: backup email not sent!\n";
+}
 $smtp->quit;
 #clean up:
 unlink 'r2m.tar.gz';

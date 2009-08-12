@@ -6,17 +6,20 @@ use strict;
 use warnings;
 
 use Mod::ParseMail;
-use Mod::Test;
 use Data::Dumper::Simple;
 
-Log::Log4perl::init('log4perl_test.conf');
-my %message = (uid => 'dummy',
-	       from => 'return.to.me.receive@gmail.com',
-	       subject => 'subject',
-	       body => "Mod: 7-14-09 8:00 am \r\n body of message",
-    );
-my @mail = &createMail(\%message);
-#print $mail[0];
-my ($ref, $instructions) = &parseMail($mail[0]);
-print "Instructions: $instructions\n";
-print Dumper(%$ref);
+Log::Log4perl::init('conf/log4perl_test.conf');
+
+#Read in the mail:
+open(IN,"<mail.log") or die "Couldn't open mail";
+my @lines = <IN>;
+close IN;
+my $raw_message = join '', @lines;
+my %message = %{ &parseMail($raw_message)};
+my $return_date = $message{'return_time'};
+if ($return_date) {
+    print "Return date: ",&fromEpoch($return_date),"\n";
+} else {
+    print "Return date not found, see log for details.\n";
+}
+print "Message: ",Dumper(%message);

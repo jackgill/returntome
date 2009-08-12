@@ -16,7 +16,7 @@ use Mod::DB;
 use Mod::TieHandle;
 use Mod::UID;
 
-use DateTime;
+#use DateTime;
 
 my $start_daemon = 1;
 for (@ARGV) {
@@ -138,36 +138,15 @@ sub checkOutgoing {
 
     my $current_time = time;
     my @messages_to_send = &getMessagesToSend($current_time);
-    my @messages;
-    for (@messages_to_send) {
-	my %message = %$_;
-	my $uid = $message{'uid'};
-	$logger->info("Marked message $uid for sending.");
-	my $subject= $message{'subject'};
-	$message{'subject'} = "Returned To You: $subject";
-	push @messages, \%message; #KLUDGE
-    }
-    &sendMessages(@messages);
+    &sendMessages(@messages_to_send);
 }
 
 sub sendMessages{
     my @messages = @_;
     return unless @messages;
-    my $nMessages = @messages;
-    $logger->info("Sent $nMessages messages to SMTP server...");    
     my ($sent_ref,$unsent_ref) = &sendMail('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages);
-    my @sent = @$sent_ref;
-    my @unsent = @$unsent_ref;
-    my $nSent = @sent;
-    my $nUnsent = @unsent;
-    $logger->info("$nSent were sent successfully.");
-    $logger->info("$nUnsent weren't sent successfully.");
-    &putMessages('SentMessages',@sent);
-    &putMessages('UnsentMessages',@unsent);
+    &putMessages('SentMessages',@$sent);
+    &putMessages('UnsentMessages',@$unsent);
 }
 
-sub fromEpoch {
-    my $epoch = shift;
-    my $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
-    return $dt->hms . " " . $dt->mdy;
-}
+
