@@ -27,7 +27,7 @@ sub sendMail {
 
     #Connect to the SMTP server:
     unless ($smtp = Net::SMTP::SSL->new($server, Port => 465, Debug => 1)) {
-	$logger->("Could not connect to SMTP server"_);
+	$logger->("Could not connect to SMTP server");
 	return [],\@messages; #Return all messages if we couldn't connect to the SMTP server:
     } 
 

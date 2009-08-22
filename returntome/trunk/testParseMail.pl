@@ -10,8 +10,12 @@ use Data::Dumper::Simple;
 
 Log::Log4perl::init('conf/log4perl_test.conf');
 
+if (@ARGV != 1) {
+    die "Must run with one argument: mail file\n";
+}
+my $mail = $ARGV[0];
 #Read in the mail:
-open(IN,"<mail.log") or die "Couldn't open mail";
+open(IN,"<$mail") or die "Couldn't open mail";
 my @lines = <IN>;
 close IN;
 my $raw_message = join '', @lines;

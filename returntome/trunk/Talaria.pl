@@ -117,7 +117,9 @@ sub checkIncoming {
 
 	my %message = % { &parseMail($raw_message,$uid) }; 
 	my $return_time = $message{'return_time'};
-	unless ($return_time eq 'NONE') {
+	if ($return_time) {
+	    #TODO: if &fromEpoch crashes, we're boned and the message gets lost.
+	    #use eval block?
 	    $logger->info("Return date for message $uid: " . &fromEpoch($return_time));
 	    push @parsed_messages, \%message;
 	} else {
@@ -145,8 +147,8 @@ sub sendMessages{
     my @messages = @_;
     return unless @messages;
     my ($sent_ref,$unsent_ref) = &sendMail('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages);
-    &putMessages('SentMessages',@$sent);
-    &putMessages('UnsentMessages',@$unsent);
+    &putMessages('SentMessages',@$sent_ref);
+    &putMessages('UnsentMessages',@$unsent_ref);
 }
 
 

@@ -2,7 +2,10 @@
 
 ssh rtmadmin@192.168.1.10 <<EOF
 svnadmin dump svn > repository
-gzip repository
-./svn/returntome/trunk/mailTarball.pl repository.gz
+tar -cf repository.tar repository
+gzip repository.tar
+./mailTarball.pl repository.tar.gz
+rm repository.tar.gz
+rm repository
 logout
 EOF

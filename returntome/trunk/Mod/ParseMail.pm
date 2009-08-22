@@ -46,33 +46,44 @@ sub parseMail {
 	"Subject: $subject" ;    
 
     #determine if this messages is MIME formatted:
-    if ($head->count('MIME-Version')) {
+    if ($head->count('MIME-Version')) {#Is MIME formatted
 	my $mime_version = $head->get('MIME-Version',0);
 	my $content_type = $head->get('Content-Type',0);
-	
-	if ($entity->is_multipart == 1) { #TO-DO check for undef case
+	my $effective_type = $entity->effective_type;
+	if ($effective_type eq 'multipart/mixed') { #we have attachments
 	    my @parts = $entity->parts;
 	    for my $part (@parts) {
+		#skip over attachments:
+		if (my $disp = $part->head->get('Content-Disposition')) {
+		    next if $disp =~ /attachment/;
+		}
 		if ($part->effective_type eq 'text/plain') {
 		    $return_time = &parseEntity($part);
 		}
+		if ($part->effective_type eq 'multipart/alternative') {
+		    $return_time = &parseMulti($part);
+		}
 	    }
-	} else {
-	    if ($entity->effective_type eq 'text/plain') {
-		$return_time = &parseEntity($entity);
-	    } 
+	} elsif ($effective_type eq 'multipart/alternative') { #just text/plain and text/html
+	    $return_time = &parseMulti($entity);
+	} elsif ($entity->effective_type eq 'text/plain') { #just text/plain
+	    $return_time = &parseEntity($entity);
 	}
 	#Prepend MIME headers to mail:
 	$body = 
 	    "MIME-Version: $mime_version" . 
 	    "Content-Type: $content_type" . 
 	    $body;
-    } else {
+    } else {#Not MIME formatted
 	$return_time = &parseEntity($entity);
     }
 	
     $body = $body . "\n" . join('',@{$entity->body});
     rmtree("mimedump-tmp");
+
+
+    #TODO: check that $return_time is EITHER undef OR
+    #a valid epoch time
 
     #assemble the message
     my %message = (
@@ -85,6 +96,47 @@ sub parseMail {
     return \%message;
 }
 
+sub parseMulti {
+    my $entity = shift;
+    my @parts = $entity->parts;
+    my $plain_part;
+    my $html_part;
+    #strategy for parsing multipart/alternative messages:
+    #parse text/plain part
+    #any error messages in text/plain part are then copied
+    #to text/html part
+
+    for my $part (@parts) {
+	if ($part->effective_type eq 'text/plain') {
+	    $plain_part = $part;
+	}
+	if ($part->effective_type eq 'text/html') {
+	    $html_part = $part;
+	}
+    }
+    my $return_time = &parseEntity($plain_part);
+    unless ($return_time) {#if we couldn't parse it, copy over the error message
+	my @plain_lines = @{ $plain_part->body };
+	my $error_message = $plain_lines[0];
+	my @html_lines = @{ $html_part->body };
+	chomp $error_message;
+	unshift @html_lines, "<b>$error_message</b><br>\n";
+	my $bh = $html_part->bodyhandle;
+	my $IO = $bh->open("w");
+	if (not $IO) {
+	    $logger->error("Could not open MIME entity body");
+	    return;
+	}
+	$IO->print($_) for (@html_lines);
+	my $close = $IO->close; 
+	if (not $close) { #TODO: check that this works correctly
+	    $logger->error("Could not close MIME entity body");
+	    return;
+	}
+    }
+    return $return_time;
+}
+
 sub parseEntity {
     my $entity = shift;
     my @text_lines = @{ $entity->body };
@@ -93,10 +145,17 @@ sub parseEntity {
     
     #Re-write the body, possibly including an error message:
     my $bh = $entity->bodyhandle;
-    my $IO = $bh->open("w")      || die "open body: $!";
+    my $IO = $bh->open("w");
+    if (not $IO) {
+	$logger->error("Could not open MIME entity body");
+	return;
+    }
     $IO->print($_) for (@text_lines);
-    $IO->close                  || die "close I/O handle: $!";
-
+    my $close = $IO->close; 
+    if (not $close) { #TODO: check that this works correctly
+	$logger->error("Could not close MIME entity body");
+	return;
+    }
     return $return_time;
 }
 
@@ -118,9 +177,11 @@ sub parsePart {
 	if ($return_date) {
 	    $logger->debug("Return date: $return_date");
 	} else {
+	    $logger->debug("Could not understand instructions");
 	    unshift @part, "Sorry, we could not understand these instructions.\n";
 	}
     } else {
+	$logger->debug("Could not find instructions");
 	unshift @part, "Sorry, we could not find instructions in this message.\n";
     }
 

@@ -62,7 +62,7 @@ if ($smtp_response =~ /2.0.0 OK/) {
 $smtp->quit;
 
 #clean up:
-unlink $file;
+#unlink $file;
 
 #now update the subversion repository:
 #system "svn commit -F trunk/commit.log";
