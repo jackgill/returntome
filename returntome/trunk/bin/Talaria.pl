@@ -80,6 +80,7 @@ if ($pid > 0) { #CLI process
 } elsif ($pid == 0) { #daemon
     $logger->info("Talaria daemon started.");
     print "Talaria daemon started.\n";
+
     while (1) {
 	eval {&checkIncoming};
         if ($@) {

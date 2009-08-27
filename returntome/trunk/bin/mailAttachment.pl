@@ -9,15 +9,10 @@ use Net::SMTP::SSL;
 use MIME::Lite;
 use DateTime;
 
-#Make gzip'd tarball of the current source tree and email it
-
-#make the backup
-#system 'tar -cf r2m.tar trunk';
-#system 'gzip r2m.tar';
-#unlink 'r2m.tar';
-#my $file = 'r2m.tar.gz';
+die "Must run with two arguments: file and MIME-type\n" unless (@ARGV == 2);
 my $file = $ARGV[0];
-die "Must run with one argument: gzip'd tarball\n" unless ($file =~ /tar.gz$/);
+my $type = $ARGV[1];
+
 
 #declare sender and recipient:
 my $from = 'return.to.me.test@gmail.com';
@@ -34,7 +29,7 @@ my $msg = MIME::Lite->new(
     Type    => 'multipart/mixed',
     );
 $msg->attach(
-    Type     => 'application/x-tar-gz',
+    Type     => $type,
     Path     => $file,
     Filename => $file,
     Disposition => 'attachment'
@@ -61,11 +56,3 @@ if ($smtp_response =~ /2.0.0 OK/) {
 }
 $smtp->quit;
 
-#clean up:
-#unlink $file;
-
-#now update the subversion repository:
-#system "svn commit -F trunk/commit.log";
-#TODO: Check that the commit succeeded before deleting commit.log!
-#system "rm trunk/commit.log";
-#system "touch trunk/commit.log";
