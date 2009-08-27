@@ -56,7 +56,7 @@ my @tables = ('ParsedMessages','UnparsedMessages','SentMessages','UnsentMessages
 
 sub makeTables {
     #TODO: declare return_time as in integer with the appropriate length for epoch seconds
-    my $messages_schema = "(uid INTEGER(9) ZEROFILL, return_time VARCHAR(100),address VARCHAR(320),subject BLOB,body BLOB)";
+    my $messages_schema = "(uid INTEGER(9) ZEROFILL, return_time VARCHAR(100),address VARCHAR(320),mail BLOB)";
     for my $table (@tables) {
 	&sql("DROP TABLE $table");
 	&sql("CREATE TABLE $table $messages_schema");
@@ -102,10 +102,10 @@ sub putMessages {
 	my %message = %$_;
 	my $uid = $message{'uid'};
 	my $return_time = $message{'return_time'};
+	$return_time = 0 unless $return_time;
 	my $address = $message{'address'};
-	my $subject = $message{'subject'};
-	my $body = $message{'body'};
-	&sql("INSERT INTO $table VALUES ('$uid','$return_time','$address','$subject','$body');");
+	my $mail = $message{'mail'};
+	&sql("INSERT INTO $table VALUES ('$uid','$return_time','$address','$mail');");
     }
 }
 
@@ -120,8 +120,7 @@ sub getMessages {
 	    uid => $row[0],
 	    return_time => $row[1],
 	    address => $row[2],
-	    subject => $row[3],
-	    body => $row[4],
+	    mail => $row[3],
 	);
 	push @messages, \%message;
 	#delete the message:
@@ -143,8 +142,7 @@ sub getMessagesToSend {
 	    uid => $row[0],
 	    return_time => $row[1],
 	    address => $row[2],
-	    subject => $row[3],
-	    body => $row[4],
+	    mail => $row[3],
 	    );
 	push @messages, \%message;
     }

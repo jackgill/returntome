@@ -6,21 +6,13 @@ use strict;
 use Exporter;
 use Data::Dumper::Simple;
 use Log::Log4perl;
-#use Email::Simple;
 use MIME::Parser;
 use File::Path;
-use Date::Manip;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(&parseMail &getDate &fromEpoch);
+our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions);
 
 my $logger = Log::Log4perl->get_logger();
-
-sub getDate {
-    my $raw_message = shift;
-    my $email = Email::Simple->new($raw_message);
-    return $email->header('Date');
-}
 
 sub parseMail {
     my $raw_message = shift;
@@ -40,7 +32,7 @@ sub parseMail {
     my $from = $head->get('From',0);
 
     my $return_time;
-    my $body = 
+    my $mail = 
 	"From: return.to.me.test\@gmail.com\n" .
 	"To: $from" .
 	"Subject: $subject" ;    
@@ -70,15 +62,15 @@ sub parseMail {
 	    $return_time = &parseEntity($entity);
 	}
 	#Prepend MIME headers to mail:
-	$body = 
+	$mail = 
 	    "MIME-Version: $mime_version" . 
 	    "Content-Type: $content_type" . 
-	    $body;
+	    $mail;
     } else {#Not MIME formatted
 	$return_time = &parseEntity($entity);
     }
 	
-    $body = $body . "\n" . join('',@{$entity->body});
+    $mail = $mail . "\n" . join('',@{$entity->body});
     rmtree("mimedump-tmp");
 
 
@@ -88,7 +80,7 @@ sub parseMail {
     #assemble the message
     my %message = (
 	address => $from,
-	body => $body,
+	mail => $mail,
 	uid => $uid,
 	return_time => $return_time,
 	);
@@ -163,17 +155,16 @@ sub parsePart {
     my @part = @_;
     my $instructions;
     my $return_date;
+    
+    #look for instructions:
     for my $line (@part) {
-	#If we've already found the instructions, don't bother parsing:
-	next if $instructions;
 	$instructions = &parseLine($line);
-	if ($instructions) {
-	    $return_date = &parseInstructions($instructions);
-	}
+	last if $instructions; #stop looking if instructions were found
     }
 
     if  ($instructions) {
 	$logger->debug("Instructions: $instructions");
+	$return_date = &parseInstructions($instructions);
 	if ($return_date) {
 	    $logger->debug("Return date: $return_date");
 	} else {
@@ -200,7 +191,7 @@ sub parseLine {
 	$instructions =~ s/$flag//;
 	return $instructions;
     } else {
-	return undef;
+	return;
     }
 }
 ###########################################3
@@ -210,7 +201,7 @@ use Date::Manip;
 sub parseInstructions {
     my $instructions = shift;
     my $date = ParseDate($instructions);    
-    return undef unless $date;
+    return unless $date;
     my $secs = UnixDate($date,"%s");
     return $secs;
 }
@@ -221,35 +212,6 @@ sub fromEpoch {
     my $epoch = shift;
     my $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
     return $dt->hms . " " . $dt->mdy;
-}
-
-sub getReturnDate {
-    my $text = shift;
-
-    my @lines = split(/\r/,$text); #break it into lines
-    my $instructions = 'NONE';
-
-    #extract the instructions
-    for my $line (@lines) {
-	if ($line =~ /^(\s*(R2M|RETURNTOME):?)/i) {
-	    $instructions = $line;
-	    $instructions =~ s/\n//;
-	    $instructions =~ s/$1//;
-	}
-    }
-    if ($instructions eq 'NONE') {
-	$logger->info('Could not find instructions!');
-	return 'NONE'; 
-    } else {
-	$logger->info("Instructions: $instructions");
-    }
-    my $date = ParseDate($instructions);
-    
-    return 'NONE' unless $date;
-    
-    my $secs = UnixDate($date,"%s");
-
-    return $secs;
 }
 
 1;

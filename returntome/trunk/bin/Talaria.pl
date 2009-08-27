@@ -18,14 +18,18 @@ use Mod::UID;
 
 #use DateTime;
 
+#Defaults for command line switches:
 my $start_daemon = 1;
+my $clear_tables = 0;
+
+#Check command line arguments:
 for (@ARGV) {
     $start_daemon = 0 if ($_ eq '--no-daemon');
-    &clearTables if ($_ eq '--clear-tables');
+    $clear_tables = 1 if ($_ eq '--clear-tables');
 } 
 
 #clean up:
-unlink 'talaria.log';
+#unlink 'talaria.log';
 
 #initialize the logger:
 Log::Log4perl::init('conf/log4perl_talaria.conf');
@@ -36,7 +40,7 @@ tie(*STDERR, 'Mod::TieHandle');
 
 #Connect to DB:
 &connect;
-
+&clearTables if $clear_tables;
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
 #The child process does the work: daemon
@@ -48,7 +52,7 @@ if ($pid > 0) { #CLI process
     #define commands:
     my %commands = (
 	log => sub {
-	    system 'cat talaria.log';
+	    system 'cat log/talaria.log';
 	},
 	showdb => \&showTables,
 	makedb => \&makeTables,

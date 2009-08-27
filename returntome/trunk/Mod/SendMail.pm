@@ -42,8 +42,7 @@ sub sendMail {
 	my %message = %$_;
 
 	my $address = $message{'address'};
-#	my $subject = $message{'subject'};
-	my $body = $message{'body'};
+	my $mail = $message{'mail'};
 	my $uid = $message{'uid'};
 
 	$logger->debug("Sending message:");
@@ -53,12 +52,7 @@ sub sendMail {
 	$smtp->mail($from . "\n");
 	$smtp->to($address . "\n");
 	$smtp->data();
-	#Gmail rewrites these headers anyway:
-#	$smtp->datasend("From: " . "ReturnToMe" . "\r");
-#	$smtp->datasend("To: " . $address . "\r");
-#	$smtp->datasend("Subject: " . $subject . "\n");
-#	$smtp->datasend("\n");
-	$smtp->datasend($body . "\n");
+	$smtp->datasend($mail . "\n");
 	$smtp->dataend();
 	my $smtp_response = $smtp->message;
 	if ($smtp_response =~ /2.0.0 OK/) {
