@@ -14,7 +14,7 @@ use Mod::SendMail;
 use Mod::ParseMail;
 use Mod::DB;
 use Mod::TieHandle;
-use Mod::UID;
+#use Mod::UID;
 
 #use DateTime;
 
@@ -57,6 +57,12 @@ if ($pid > 0) { #CLI process
 	showdb => \&showTables,
 	makedb => \&makeTables,
 	cleardb => \&clearTables, 
+	checkmail => sub {
+	    eval {&checkIncoming};
+	    if ($@) {
+		$logger->error("Error checking incoming: $@");
+	    }
+	},
 	time => sub {
 	    print &fromEpoch(time),"\n";
 	},
@@ -156,4 +162,11 @@ sub sendMessages{
     &putMessages('UnsentMessages',@$unsent_ref);
 }
 
+our $num = 0;
+
+sub getUID {
+    my $uid = sprintf "%09d", $num;
+    $num++;
+    return $uid;
+}
 

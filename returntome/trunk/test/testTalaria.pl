@@ -20,11 +20,14 @@ use DateTime;
 Log::Log4perl::init('conf/log4perl_test.conf');
 tie(*STDERR, 'Mod::TieHandle');
 
+#Clear inbox:
+&getMail('imap.gmail.com','return.to.me.receive@gmail.com','return2me');
+
 #Create messages:
 #my @return_times;
 my @messages;
-my $nMessages = 5;
-my $minutes = 30;
+my $nMessages = 2;
+my $minutes = 2;
 
 print "Sent:\n\n";
 printf "%-20s %-20s\n",'Subject','Return Time';
@@ -38,7 +41,7 @@ for (my $i = 0; $i < $nMessages; $i++) {
     #$return_times{$subject} = $return_when;
     
     printf "%-20s %-20s\n",$subject,$return_when;
-    push @messages, {uid => 'dummy', address => 'return.to.me.test@gmail.com',mail => "Subject: $subject\n\nR2M: $return_when \nbody $i"};
+    push @messages, {uid => 'dummy', address => 'return.to.me.test@gmail.com',mail => "To: return.to.me.test\@gmail.com\nFrom: return.to.me.receive\@gmail.com\nSubject: $subject\n\nR2M: $return_when \nbody $i"};
 }
 
 #Send messages:

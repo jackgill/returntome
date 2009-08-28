@@ -35,7 +35,7 @@ sub parseMail {
     my $mail = 
 	"From: return.to.me.test\@gmail.com\n" .
 	"To: $from" .
-	"Subject: $subject" ;    
+	"Subject: R2M: $subject" ;    
 
     #determine if this messages is MIME formatted:
     if ($head->count('MIME-Version')) {#Is MIME formatted
@@ -84,6 +84,12 @@ sub parseMail {
 	uid => $uid,
 	return_time => $return_time,
 	);
+
+    #If parsing failed, store the raw message:
+    #TODO: check that this works
+#    unless ($return_time) {
+#	%message{mail} = $raw_message;
+#    }
 
     return \%message;
 }
