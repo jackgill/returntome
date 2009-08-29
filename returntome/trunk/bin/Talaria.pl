@@ -7,7 +7,7 @@ use 5.010;
 
 use Log::Log4perl;
 use File::Copy;
-
+#use Data::Dumper::Simple;
 use Mod::GetMail;
 use Mod::SendMail;
 #use Mod::Test;
@@ -15,8 +15,12 @@ use Mod::ParseMail;
 use Mod::DB;
 use Mod::TieHandle;
 #use Mod::UID;
+use Mod::Conf;
 
 #use DateTime;
+
+#UID counter:
+our $num = 0;
 
 #Defaults for command line switches:
 my $start_daemon = 1;
@@ -28,9 +32,6 @@ for (@ARGV) {
     $clear_tables = 1 if ($_ eq '--clear-tables');
 } 
 
-#clean up:
-#unlink 'talaria.log';
-
 #initialize the logger:
 Log::Log4perl::init('conf/log4perl_talaria.conf');
 my $logger = Log::Log4perl->get_logger();
@@ -38,9 +39,16 @@ my $logger = Log::Log4perl->get_logger();
 #Send STDERR to logger:
 tie(*STDERR, 'Mod::TieHandle');
 
+
+my %conf = %{ &getConf("conf/talaria.conf") };
+
+#TODO: check that conf file was complete!
+
+
 #Connect to DB:
-&connect;
+&DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
 &clearTables if $clear_tables;
+
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
 #The child process does the work: daemon
@@ -73,7 +81,7 @@ if ($pid > 0) { #CLI process
 	print "Talaria>"; #display prompt
 	chomp(my $line = <STDIN>); #read prompt
 	if ($line eq 'stop'){
-	    &disconnect;
+	    &DB::disconnect;
 	    kill 9, $pid; #kill the daemon
 	    $logger->info("Talaria daemon stopped.");
 	    print "Talaria daemon stopped.\n";
@@ -81,7 +89,7 @@ if ($pid > 0) { #CLI process
 	}
 	elsif ($commands{$line}) {
 	    eval { &{$commands{$line}} };
-	    warn "Error executing command: $@" if $@;
+	    print "Error executing command: $@" if $@;
 	}
 	else {
 	    print "Unrecognized command\n";
@@ -111,7 +119,7 @@ sub checkIncoming {
     $logger->debug('');
     $logger->debug('Checking incoming...');
 
-    my @raw_messages = &getMail('imap.gmail.com','return.to.me.test@gmail.com','return2me');
+    my @raw_messages = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
     my @parsed_messages;
     my @unparsed_messages;
 
@@ -142,7 +150,6 @@ sub checkIncoming {
     &putMessages('UnparsedMessages',@unparsed_messages);
     #If we couldn't parse the message, return it to sender:
     &sendMessages(@unparsed_messages);
-
 }
 
 sub checkOutgoing {
@@ -157,12 +164,12 @@ sub checkOutgoing {
 sub sendMessages{
     my @messages = @_;
     return unless @messages;
-    my ($sent_ref,$unsent_ref) = &sendMail('smtp.gmail.com','return.to.me.test@gmail.com','return2me',@messages);
+    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
     &putMessages('SentMessages',@$sent_ref);
     &putMessages('UnsentMessages',@$unsent_ref);
 }
 
-our $num = 0;
+
 
 sub getUID {
     my $uid = sprintf "%09d", $num;

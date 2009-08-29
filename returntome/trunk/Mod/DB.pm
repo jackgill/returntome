@@ -19,23 +19,8 @@ my $dbh; #DBI database handle
 my $logger = Log::Log4perl->get_logger();
 
 sub connect {
-    my %config; #stores config variables
-    #read config file:
-    open(CONFIG,"<conf/db.conf") or die "Couldn't open conf/db.conf: $!\n";
-    while (<CONFIG>) {
-	chomp;                  # no newline
-	s/#.*//;                # no comments
-	s/^\s+//;               # no leading white
-	s/\s+$//;               # no trailing white
-	next unless length;     # anything left?
-	my ($var, $value) = split(/\s*=\s*/, $_, 2);
-	$config{$var} = $value;
-    }
-    #TODO: check that these get set correctly!
-    my $db = "mysql:database=" . $config{database};
-    my $user = $config{username};
-    my $password = $config{password};
-    $dbh = DBI->connect("DBI:$db",$user,$password) or $logger->error("DB: Couldn't connect to database: " . DBI->errstr); 
+    my ($db, $user, $pass) = @_;
+    $dbh = DBI->connect("DBI:$db",$user,$pass) or $logger->error("DB: Couldn't connect to database: " . DBI->errstr); 
     $logger->debug("Connected to database.");
 }
 
@@ -62,6 +47,7 @@ sub makeTables {
 	&sql("CREATE TABLE $table $messages_schema");
     }
 }
+
 sub clearTables {
     for my $table (@tables) {
 	&sql("DELETE FROM $table");

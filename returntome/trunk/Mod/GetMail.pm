@@ -18,6 +18,13 @@ sub getMail {
     my $pass = shift;
 
     my $logger = Log::Log4perl->get_logger();
+
+    unless ($server && $user && $pass) {
+	$logger->error("GetMail did not receive necessary arguments.");
+	return ();
+    }
+
+
     
     #Create the IMAP client
     my $imap = Net::IMAP::Simple::SSL->new($server);

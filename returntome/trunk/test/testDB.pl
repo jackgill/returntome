@@ -7,18 +7,25 @@ use warnings;
 
 use Data::Dumper::Simple;
 
-use lib '/home/jack/returntome/sandbox/Modules/';
 use Mod::DB;
+use Mod::Test;
 
-open;
-my %message = (
-    uid => '001',
-    from => 'foo@bar.com',
-    subject => 'subject line',
-    body => 'this is the body',
-    );
-putMessage(\%message);
-my %_message = %{ getMessage('001') };
-close;
-print Dumper(%_message);
+#initialize the logger:
+Log::Log4perl::init('conf/log4perl_test.conf');
+my $logger = Log::Log4perl->get_logger();
+
+#Send STDERR to logger:
+tie(*STDERR, 'Mod::TieHandle');
+
+#Get config:
+my %conf = %{ &getConf("conf/test.conf") };
+
+&DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+my @put_messages = &createMessages(2,2);
+&putMessages('table',@messages);
+my @get_messages = &getMessages('table',); #FIXME
+
+#TODO: compare @put_messages and @get_messages
+
+&DB::disconnect;
 
