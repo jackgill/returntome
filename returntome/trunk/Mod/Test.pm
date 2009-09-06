@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use Exporter;
-use Mod::UID;
+#use Mod::UID;
 use IO::Scalar;
 use Time::Piece;
 use MIME::Lite;
@@ -17,28 +17,34 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(&createMessages &createMail &printLine);
 our @EXPORT_OK = qw(&sendMail &getMail);
 
+my $logger = Log::Log4perl->get_logger();
+
 sub sendMail {
     my $server = shift;
     my $user = shift;
     my $password = shift;
     my @messages = @_;
-    my $logger = Log::Log4perl->get_logger();
-    $logger->info('Called &sendMessages with:');
-    $logger->info("\t\$server = $server");
-    $logger->info("\t\$user = $user");
-    $logger->info("\t\$password = $password");
+
+    #$logger->info('Called &Mod::Test::sendMessages with:');
+    #$logger->info("\t\$server = $server");
+    #$logger->info("\t\$user = $user");
+    #$logger->info("\t\$password = $password");
     for (@messages) {
 	my %message = %$_;
-	$logger->info(Dumper(%message));
+	$logger->info("Sent message " . $message{uid});
+	#$logger->info(Dumper(%message));
     }
+    my @unsent = ();
+    return \@messages,\@unsent;
 }
 
 my $nGetMailCalls = 0;
 
 sub getMail {
-    return () unless ($nGetMailCalls == 0);
-     my @mail = &createMail(2,2);
-     return @mail;
+    #return () unless ($nGetMailCalls == 0);
+    $logger->debug('Called &Mod::Test::getMail');
+    my @mail = &createMail(2,2);
+    return @mail;
 }
 
 sub createMessages {
@@ -52,7 +58,7 @@ sub createMessages {
 	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i";
 	push @messages, {uid => 'dummy', 
 			 address => 'return.to.me.receive@gmail.com',
-			 mail => "To: return.to.me.receive\@gmail.com\nFrom: return.to.me.test\@gmail.com\nSubject: subject $i\n\nR2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i",
+			 mail => "To: return.to.me.receive\@gmail.com\nFrom: return.to.me.test\@gmail.com\nSubject: subject ${i}\n\nR2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i",
 	};
     }
     return @messages;

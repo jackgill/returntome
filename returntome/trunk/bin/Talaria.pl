@@ -7,29 +7,29 @@ use 5.010;
 
 use Log::Log4perl;
 use File::Copy;
-#use Data::Dumper::Simple;
-use Mod::GetMail;
-use Mod::SendMail;
-#use Mod::Test;
+
 use Mod::ParseMail;
 use Mod::DB;
 use Mod::TieHandle;
-#use Mod::UID;
 use Mod::Conf;
-
+use Mod::GetMail;
+use Mod::SendMail;
 #use DateTime;
-
-#UID counter:
-our $num = 0;
 
 #Defaults for command line switches:
 my $start_daemon = 1;
 my $clear_tables = 0;
-
+my $test_mode = 0;
 #Check command line arguments:
 for (@ARGV) {
     $start_daemon = 0 if ($_ eq '--no-daemon');
     $clear_tables = 1 if ($_ eq '--clear-tables');
+    $test_mode = 1 if ($_ eq '--test-mode');
+} 
+if ($test_mode) {
+    print "Test mode enabled.\n";
+    require Mod::Test;
+    Mod::Test->import(qw(getMail sendMail));
 } 
 
 #initialize the logger:
@@ -46,7 +46,7 @@ my %conf = %{ &getConf("conf/talaria.conf") };
 
 
 #Connect to DB:
-&DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+&Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
 &clearTables if $clear_tables;
 
 #This program is implemented as 2 processes:
@@ -81,7 +81,7 @@ if ($pid > 0) { #CLI process
 	print "Talaria>"; #display prompt
 	chomp(my $line = <STDIN>); #read prompt
 	if ($line eq 'stop'){
-	    &DB::disconnect;
+	    &Mod::DB::disconnect;
 	    kill 9, $pid; #kill the daemon
 	    $logger->info("Talaria daemon stopped.");
 	    print "Talaria daemon stopped.\n";
@@ -171,9 +171,4 @@ sub sendMessages{
 
 
 
-sub getUID {
-    my $uid = sprintf "%09d", $num;
-    $num++;
-    return $uid;
-}
 

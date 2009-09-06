@@ -10,7 +10,7 @@ use DBI;
 use Log::Log4perl;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend);
+our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID);
 use Carp;
 
 #Global variables...ugh
@@ -46,12 +46,18 @@ sub makeTables {
 	&sql("DROP TABLE $table");
 	&sql("CREATE TABLE $table $messages_schema");
     }
+    &sql("create table UID (uid INTEGER(9))");
 }
 
 sub clearTables {
     for my $table (@tables) {
 	&sql("DELETE FROM $table");
     }
+    &resetUID;
+}
+
+sub resetUID {
+    &sql("UPDATE UID SET uid = 0;");
 }
 
 sub showTables {
@@ -137,5 +143,11 @@ sub getMessagesToSend {
     #TODO: Is there a more efficient way to do this?
 
     return @messages;
+}
+sub getUID {
+    &sql("SELECT * FROM UID;");
+    my @row = $sth->fetchrow_array();
+    &sql("update UID SET uid = uid + 1;");
+    return $row[0];
 }
 1;
