@@ -1,0 +1,37 @@
+#!/usr/bin/perl
+
+use 5.010;
+
+use strict;
+use warnings;
+use lib '..';
+use Mod::ParseMail;
+
+use CGI qw/:standard/;
+use CGI::Carp qw(fatalsToBrowser); #send errors to browser as well as server error log
+
+print 
+    header,
+    start_html('R2M'),
+    h1('Date Parser Test'),
+    start_form,
+    "Enter instructions: ",textfield('name'),
+    submit,
+    end_form,
+    hr,"\n";
+
+if (param) {
+    my $input = param('name');
+    print "Input:  ",$input,".<br>";
+    my $epoch = &parseInstructions($input);
+    my $output;
+    if ($epoch) {
+	$output = &fromEpoch($epoch);    
+    } else {
+	$output = "error";
+    }
+    print "Output: ",$output,".\n";
+}
+
+print end_html;
+

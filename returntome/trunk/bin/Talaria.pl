@@ -20,11 +20,19 @@ use Mod::SendMail;
 my $start_daemon = 1;
 my $clear_tables = 0;
 my $test_mode = 0;
+
 #Check command line arguments:
+#TODO: Redo this with GetOpt
 for (@ARGV) {
-    $start_daemon = 0 if ($_ eq '--no-daemon');
-    $clear_tables = 1 if ($_ eq '--clear-tables');
-    $test_mode = 1 if ($_ eq '--test-mode');
+    if ($_ eq '--no-daemon'){
+	$start_daemon = 0;
+    } elsif ($_ eq '--clear-tables') {
+	$clear_tables = 1;
+    } elsif ($_ eq '--test-mode') {
+	$test_mode = 1;
+    } else {
+	die "Unrecongized command line argument: $_\n";
+    }
 } 
 if ($test_mode) {
     print "Test mode enabled.\n";
@@ -39,11 +47,15 @@ my $logger = Log::Log4perl->get_logger();
 #Send STDERR to logger:
 tie(*STDERR, 'Mod::TieHandle');
 
-
+#Read conf file:
 my %conf = %{ &getConf("conf/talaria.conf") };
-
-#TODO: check that conf file was complete!
-
+#Check that conf variables are defined:
+my @conf_vars = qw(db_server db_user db_pass);
+for (@conf_vars) {
+    unless (defined $conf{$_}) {
+	die "Configuration error: conf/talaria.conf does not define $_\n";
+    }
+}
 
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
@@ -80,7 +92,7 @@ if ($pid > 0) { #CLI process
     while (1) {
 	print "Talaria>"; #display prompt
 	chomp(my $line = <STDIN>); #read prompt
-	if ($line eq 'stop'){
+	if ($line eq 'stop'){ #this command must be outside the eval block so we can exit
 	    &Mod::DB::disconnect;
 	    kill 9, $pid; #kill the daemon
 	    $logger->info("Talaria daemon stopped.");
@@ -99,6 +111,7 @@ if ($pid > 0) { #CLI process
     $logger->info("Talaria daemon started.");
     print "Talaria daemon started.\n";
 
+    my $last_check = 0; #TODO: persist this across Talaria.pl invocations
     while (1) {
 	eval {&checkIncoming};
         if ($@) {
@@ -108,25 +121,38 @@ if ($pid > 0) { #CLI process
         if ($@) {
 	    $logger->error("Error checking outgoing: $@");
 	}
+	#Once a day, purge all sent messages
+	if (time > ($last_check + (60 * 60 * 24))) {
+	    eval {&purgeDayOldSentMessages};
+	    if ($@) {
+		$logger->error("Error purging sent messages: $@");
+	    }
+	    $last_check = time;
+	}
 	sleep 60;
     }
 } else {
     die "Couldn't create daemon: $!\n";
 }
 
+##################################################
 #Subroutines:
 sub checkIncoming {
     $logger->debug('');
     $logger->debug('Checking incoming...');
 
+    #Check for new messages:
     my @raw_messages = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
     my @parsed_messages;
     my @unparsed_messages;
 
+    #Log the number of new messages:
     my $nMessages = @raw_messages;
     if ($nMessages != 0) {
 	$logger->info("Retrieved $nMessages messages from IMAP server");
     }
+    
+    #Parse the messages:
     for my $raw_message (@raw_messages) {
 	my $uid = &getUID;
 	$logger->debug('');
@@ -146,8 +172,10 @@ sub checkIncoming {
 	    push @unparsed_messages, \%message;
 	}
     }
+    #Store the parsed and unparsed messages in the appropriate tables:
     &putMessages('ParsedMessages',@parsed_messages);
     &putMessages('UnparsedMessages',@unparsed_messages);
+
     #If we couldn't parse the message, return it to sender:
     &sendMessages(@unparsed_messages);
 }

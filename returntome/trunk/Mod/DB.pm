@@ -10,7 +10,7 @@ use DBI;
 use Log::Log4perl;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID);
+our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas);
 use Carp;
 
 #Global variables...ugh
@@ -36,20 +36,28 @@ sub sql {
     $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }
 
-#TODO: Pass this in as an argument?
-my @tables = ('ParsedMessages','UnparsedMessages','SentMessages','UnsentMessages');
+sub getSchemas {
+    my $message_schema = "(uid INTEGER(9) ZEROFILL, return_time INTEGER(10),address VARCHAR(320),mail BLOB)";
+    my %schemas = (
+	'ParsedMessages' => $message_schema,
+	'UnparsedMessages' => $message_schema,
+	'SentMessages' => $message_schema,
+	'UnsentMessages' => $message_schema,
+	'UID' => "(uid INTEGER(9) ZEROFILL)",
+	);
+    return \%schemas
+} 
 
 sub makeTables {
-    #TODO: declare return_time as in integer with the appropriate length for epoch seconds
-    my $messages_schema = "(uid INTEGER(9) ZEROFILL, return_time VARCHAR(100),address VARCHAR(320),mail BLOB)";
-    for my $table (@tables) {
+    my %schemas = %{ &getTables };
+    for my $table (keys %schemas) {
 	&sql("DROP TABLE $table");
-	&sql("CREATE TABLE $table $messages_schema");
+	&sql("CREATE TABLE $table $schemas{$table}");
     }
-    &sql("create table UID (uid INTEGER(9))");
 }
 
-sub clearTables {
+sub clearMessageTables {
+    my @tables = ('UnparsedMessages,','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
     for my $table (@tables) {
 	&sql("DELETE FROM $table");
     }
@@ -57,10 +65,11 @@ sub clearTables {
 }
 
 sub resetUID {
-    &sql("UPDATE UID SET uid = 0;");
+    &sql("UPDATE UID SET uid = 000000000;");
 }
 
 sub showTables {
+    my @tables = keys %{ &getSchemas };
     for my $table (@tables) {
 	print "$table:\n";
 	&showTable($table);
@@ -144,10 +153,43 @@ sub getMessagesToSend {
 
     return @messages;
 }
+
+sub purgeSentMessages {
+    my $purge_time = shift;
+    &sql("DELETE FROM SentMessages WHERE return_time < $purge_time;");    
+}
+
 sub getUID {
     &sql("SELECT * FROM UID;");
     my @row = $sth->fetchrow_array();
     &sql("update UID SET uid = uid + 1;");
+    #return sprintf "%09d",$row[0];
     return $row[0];
 }
+
+sub getTable {
+    my $table_name = shift;
+    my @table;
+    
+    #this returns a table with one column. Each row is the name of a column in $table_name
+    &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table_name'");  
+    my @col_refs = @{ $sth->fetchall_arrayref }; #this is an array of references to arrays
+    my @col_names; #this will hold the names of the columns
+    for my $col_ref (@col_refs) {
+	my @row = @$col_ref; #get the array which is a row in the schema table
+	my $col_name = $row[0]; #get the first (and only) column in the row
+	push @col_names, $col_name;
+    }
+    push @table, \@col_names;
+
+    #Now get the entire table:
+    &sql("SELECT * FROM $table_name");
+    my @row;
+    while (@row = $sth->fetchrow_array()) {
+	my @this_row = @row;
+	push @table, \@this_row;
+    }
+    return \@table;
+}
+
 1;
