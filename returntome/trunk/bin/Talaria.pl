@@ -7,6 +7,7 @@ use 5.010;
 
 use Log::Log4perl;
 use File::Copy;
+use Term::ReadKey;
 
 use Mod::ParseMail;
 use Mod::DB;
@@ -47,8 +48,14 @@ my $logger = Log::Log4perl->get_logger();
 #Send STDERR to logger:
 tie(*STDERR, 'Mod::TieHandle');
 
-#Read conf file:
-my %conf = %{ &getConf("conf/talaria.conf") };
+#Read encrypted conf file:
+my $conf_file = "conf/talaria.conf.crypt";
+my %conf = %{ &getCipherConf($conf_file) };
+unless (%conf) {
+    print "Failed to decrypt $conf_file\n";
+    die "\n";
+}
+
 #Check that conf variables are defined:
 my @conf_vars = qw(db_server db_user db_pass);
 for (@conf_vars) {

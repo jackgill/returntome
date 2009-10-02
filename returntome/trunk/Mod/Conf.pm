@@ -7,15 +7,34 @@ use warnings;
 
 use Exporter;
 
+use Mod::Crypt;
+
 our @ISA = qw(Exporter);
-our @EXPORT = qw(getConf);
+our @EXPORT = qw(getConf getCipherConf);
 
 sub getConf {
     my $file = shift;
-    #read config file:
-    my %conf; #stores config variables
     open(CONFIG,"<$file") or die "Couldn't open $file: $!\n";
-    while (<CONFIG>) {
+    my @file = <CONFIG>;
+    return &readConf(\@file);
+}
+
+sub getCipherConf {
+    my $file = shift;
+    my $key = &getKey;
+    open(CONFIG,"<$file") or die "Couldn't open $file: $!\n";
+    my @slurp = <CONFIG>;
+    my $cipher_text = join("", @slurp);
+    my $plain_text = &decrypt($key, $cipher_text);
+    return {} unless($plain_text =~ /[\w\s]{10,}/);
+    my @file = split("\n",$plain_text);
+    return &readConf(\@file);    
+}
+
+sub readConf {
+    my @file = @{ shift @_ };
+    my %conf; #stores config variables
+    for (@file) {
 	chomp;                  # no newline
 	s/#.*//;                # no comments
 	s/^\s+//;               # no leading white
@@ -26,5 +45,6 @@ sub getConf {
     }
     return \%conf;
 }
+
 
 1;
