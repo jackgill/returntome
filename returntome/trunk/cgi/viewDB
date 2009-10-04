@@ -22,14 +22,21 @@ print h4('"If you want a professional looking website, go hire a web designer." 
 print br();
 print start_form,
  "Table: ",
-popup_menu(-name=>'table', -values => \@tables),
+popup_menu(-name=>'table', -values => [@tables,'All']),
 submit,
     end_form;
 
 if (param) {
-    &displayTable(param('table'));
+    if (param('table') eq 'All') {
+	for (@tables) {
+	    &displayTable($_);
+	}
+    } else {	    
+	&displayTable(param('table'));
+    }
 }
 print end_html();
+
 sub displayTable {
     my $table_name = shift;
 #Connect to the database:

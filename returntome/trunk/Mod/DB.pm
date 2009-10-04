@@ -10,7 +10,8 @@ use DBI;
 use Log::Log4perl;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas);
+#TODO: order these correctly
+our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas &purgeSentMessages);
 use Carp;
 
 #Global variables...ugh
@@ -49,22 +50,19 @@ sub getSchemas {
 } 
 
 sub makeTables {
-    my %schemas = %{ &getTables };
+    my %schemas = %{ &getSchemas };
     for my $table (keys %schemas) {
 	&sql("DROP TABLE $table");
 	&sql("CREATE TABLE $table $schemas{$table}");
     }
+    &sql("INSERT INTO UID VALUES ('000000000');");
 }
 
-sub clearMessageTables {
-    my @tables = ('UnparsedMessages,','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
+sub clearTables {
+    my @tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
     for my $table (@tables) {
 	&sql("DELETE FROM $table");
     }
-    &resetUID;
-}
-
-sub resetUID {
     &sql("UPDATE UID SET uid = 000000000;");
 }
 
@@ -75,6 +73,9 @@ sub showTables {
 	&showTable($table);
     }
 }
+
+#TODO: needs better formatting
+#is this method obsoleted by cgi/viewDB?
 sub showTable {
     my $table = shift;
     &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table'");  #this returns a table with one column. Each row is the name of a column in $table_name
@@ -97,6 +98,7 @@ sub showTable {
 	print "\n";
     }
 }
+
 sub putMessages {
     my $table = shift;
     for (@_) {
@@ -112,6 +114,7 @@ sub putMessages {
 
 sub getMessages {
     my $table = shift;
+    #TODO: error checking: make sure $table is a valid table name
     my @uids = @_;
     my @messages;
     for my $uid (@uids) {

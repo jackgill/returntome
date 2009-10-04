@@ -6,7 +6,7 @@ use warnings;
 use strict;
 
 use Exporter;
-#use Mod::UID;
+use Mod::DB;
 use IO::Scalar;
 use Time::Piece;
 use MIME::Lite;
@@ -56,7 +56,7 @@ sub createMessages {
 	my $return_time = time + int(rand($nMinutes * 60));
 	my $dt = DateTime->from_epoch( epoch => $return_time, time_zone => 'America/Denver');
 	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i";
-	push @messages, {uid => 'dummy', 
+	push @messages, {uid => &getUID, 
 			 address => 'return.to.me.receive@gmail.com',
 			 mail => "To: return.to.me.receive\@gmail.com\nFrom: return.to.me.test\@gmail.com\nSubject: subject ${i}\n\nR2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i",
 	};

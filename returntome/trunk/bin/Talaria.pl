@@ -66,7 +66,7 @@ for (@conf_vars) {
 
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-&clearTables if $clear_tables;
+&clearMessageTables if $clear_tables;
 
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
@@ -83,7 +83,7 @@ if ($pid > 0) { #CLI process
 	},
 	showdb => \&showTables,
 	makedb => \&makeTables,
-	cleardb => \&clearTables, 
+	cleardb => \&clearMessageTables, 
 	checkmail => sub {
 	    eval {&checkIncoming};
 	    if ($@) {
