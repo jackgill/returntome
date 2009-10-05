@@ -21,7 +21,7 @@ sub getConf {
 
 sub getCipherConf {
     my $file = shift;
-    my $key = &getKey;
+    my $key = shift;
     open(CONFIG,"<$file") or die "Couldn't open $file: $!\n";
     my @slurp = <CONFIG>;
     my $cipher_text = join("", @slurp);

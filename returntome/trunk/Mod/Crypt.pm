@@ -10,7 +10,7 @@ use Crypt::CBC;
 use Term::ReadKey;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(encrypt decrypt getKey);
+our @EXPORT = qw(encrypt decrypt getKey encryptMessages decryptMessages);
 
 sub encrypt {
     my $key = shift;
@@ -37,5 +37,28 @@ sub getKey {
     chomp $key;
     ReadMode('normal');
     return $key;
+}
+
+sub encryptMessages {
+    my $key = shift;
+    my @messages = @_;
+    for (@messages) {
+	my %message = %$_;
+	$message{mail} = &encrypt($key, $message{mail});
+	$_ = \%message;
+    }
+    return @messages;
+}
+
+
+sub decryptMessages {
+    my $key = shift;
+    my @messages = @_;
+    for (@messages) {
+	my %message = %$_;
+	$message{mail} = &decrypt($key, $message{mail});
+	$_ = \%message;
+    }
+    return @messages;
 }
 1;

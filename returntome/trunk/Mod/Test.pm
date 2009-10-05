@@ -6,7 +6,9 @@ use warnings;
 use strict;
 
 use Exporter;
+
 use Mod::DB;
+
 use IO::Scalar;
 use Time::Piece;
 use MIME::Lite;
@@ -25,14 +27,10 @@ sub sendMail {
     my $password = shift;
     my @messages = @_;
 
-    #$logger->info('Called &Mod::Test::sendMessages with:');
-    #$logger->info("\t\$server = $server");
-    #$logger->info("\t\$user = $user");
-    #$logger->info("\t\$password = $password");
     for (@messages) {
 	my %message = %$_;
 	$logger->info("Sent message " . $message{uid});
-	#$logger->info(Dumper(%message));
+	$logger->debug(Dumper(%message));
     }
     my @unsent = ();
     return \@messages,\@unsent;
@@ -56,8 +54,9 @@ sub createMessages {
 	my $return_time = time + int(rand($nMinutes * 60));
 	my $dt = DateTime->from_epoch( epoch => $return_time, time_zone => 'America/Denver');
 	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i";
-	push @messages, {uid => &getUID, 
-			 address => 'return.to.me.receive@gmail.com',
+	my $uid = &getUID;
+	push @messages, {uid => $uid, 
+			 return_time => $return_time,
 			 mail => "To: return.to.me.receive\@gmail.com\nFrom: return.to.me.test\@gmail.com\nSubject: subject ${i}\n\nR2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i",
 	};
     }
@@ -75,7 +74,7 @@ sub createMail {
 	my $msg = MIME::Lite->new(
 	    From    => 'return.to.me.receive@gmail.com',
 	    To      => 'return.to.me.test@gmail.com',
-	    Subject => 'subject $i',
+	    Subject => "subject $i",
 	    Type    => 'multipart/alternative',
 	    );
 	$msg->attach(

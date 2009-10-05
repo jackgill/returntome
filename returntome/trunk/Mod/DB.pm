@@ -8,7 +8,7 @@ use warnings;
 use Exporter;
 use DBI;
 use Log::Log4perl;
-
+use Mod::Crypt;
 our @ISA = qw(Exporter);
 #TODO: order these correctly
 our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas &purgeSentMessages);
@@ -37,8 +37,9 @@ sub sql {
     $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }
 
+my @message_tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
 sub getSchemas {
-    my $message_schema = "(uid INTEGER(9) ZEROFILL, return_time INTEGER(10),address VARCHAR(320),mail BLOB)";
+    my $message_schema = "(uid INTEGER(9) ZEROFILL, return_time INTEGER(10),mail BLOB)";
     my %schemas = (
 	'ParsedMessages' => $message_schema,
 	'UnparsedMessages' => $message_schema,
@@ -59,25 +60,23 @@ sub makeTables {
 }
 
 sub clearTables {
-    my @tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
-    for my $table (@tables) {
-	&sql("DELETE FROM $table");
+    for (@message_tables) {
+	&sql("DELETE FROM $_");
     }
     &sql("UPDATE UID SET uid = 000000000;");
 }
 
 sub showTables {
-    my @tables = keys %{ &getSchemas };
-    for my $table (@tables) {
-	print "$table:\n";
-	&showTable($table);
+    my $key = shift;
+    for (@message_tables) {
+	print "$_:\n";
+	&showTable($_,$key);
     }
 }
-
-#TODO: needs better formatting
-#is this method obsoleted by cgi/viewDB?
+use Text::Wrap;
 sub showTable {
     my $table = shift;
+    my $key = shift;
     &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table'");  #this returns a table with one column. Each row is the name of a column in $table_name
     my @col_refs = @{ $sth->fetchall_arrayref }; #this is an array of references to arrays
     my @col_names; #this will hold the names of the columns
@@ -86,16 +85,23 @@ sub showTable {
 	my $col_name = $row[0]; #get the first (and only) column in the row
 	push @col_names, $col_name;
     }
-    my $format = "%-20s | " x @col_names;
+    #my $last_col = pop @col_names;
+    #my $format = "%-20s | " x @col_names;
+    #printf $format,@col_names;
+    #printf "%-40s|", $last_col;
+    #print "\n","-" x (23*@col_names),"\n";
+    my $format = "%-9s | %-10s | %-60s\n";
     printf $format,@col_names;
-    print "\n","-" x (23*@col_names),"\n";
-    
+    print "-" x 88,"\n";
     #Now get the entire table:
     &sql("SELECT * FROM $table");
     my @row;
     while (@row = $sth->fetchrow_array()) {
-	printf $format,@row;
-	print "\n";
+	my $cipher_last = pop @row;
+	my $plain_last = &decrypt($key,$cipher_last);
+	$Text::Wrap::columns = 60;
+	my $wrapped_last =  wrap('', ' ' x 25, $plain_last);
+	printf $format,@row, $wrapped_last;
     }
 }
 
@@ -106,9 +112,15 @@ sub putMessages {
 	my $uid = $message{'uid'};
 	my $return_time = $message{'return_time'};
 	$return_time = 0 unless $return_time;
-	my $address = $message{'address'};
 	my $mail = $message{'mail'};
-	&sql("INSERT INTO $table VALUES ('$uid','$return_time','$address','$mail');");
+	#$logger->debug("INSERT INTO $table VALUES ('$uid','$return_time','$mail');");
+	my $put_msg = $dbh->prepare("INSERT INTO $table VALUES (?,?,?);");
+	if($put_msg) {
+	$put_msg->execute($uid,$return_time,$mail) or $logger->error("Error executing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
+	} else  {
+	    $logger->error("Error preparing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
+	}
+
     }
 }
 
@@ -123,8 +135,7 @@ sub getMessages {
 	my %message = (
 	    uid => $row[0],
 	    return_time => $row[1],
-	    address => $row[2],
-	    mail => $row[3],
+	    mail => $row[2],
 	);
 	push @messages, \%message;
 	#delete the message:
@@ -145,8 +156,7 @@ sub getMessagesToSend {
 	my %message = (
 	    uid => $row[0],
 	    return_time => $row[1],
-	    address => $row[2],
-	    mail => $row[3],
+	    mail => $row[2],
 	    );
 	push @messages, \%message;
     }
@@ -166,7 +176,6 @@ sub getUID {
     &sql("SELECT * FROM UID;");
     my @row = $sth->fetchrow_array();
     &sql("update UID SET uid = uid + 1;");
-    #return sprintf "%09d",$row[0];
     return $row[0];
 }
 

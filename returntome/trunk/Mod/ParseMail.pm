@@ -8,11 +8,19 @@ use Data::Dumper::Simple;
 use Log::Log4perl;
 use MIME::Parser;
 use File::Path;
+use Email::Simple;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions);
+our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions &getHeader);
 
 my $logger = Log::Log4perl->get_logger();
+
+sub getHeader {
+    my $text = shift;
+    my $header = shift;
+    my $email = Email::Simple->new($text);
+    return $email->header($header);
+}
 
 sub parseMail {
     my $raw_message = shift;
@@ -79,7 +87,6 @@ sub parseMail {
 
     #assemble the message
     my %message = (
-	address => $from,
 	mail => $mail,
 	uid => $uid,
 	return_time => $return_time,

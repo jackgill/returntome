@@ -11,6 +11,7 @@ use Mod::DB;
 use Mod::Test;
 use Mod::TieHandle;
 use Mod::Conf;
+use Mod::Crypt;
 
 #initialize the logger:
 Log::Log4perl::init('conf/log4perl_test.conf');
@@ -29,6 +30,7 @@ my %conf = %{ &getConf("conf/test.conf") };
 #&testPutMessages('UnparsedMessages');
 #&testGetSchemas;
 #&testMakeTables;
+#&testPutCryptMessages('ParsedMessages');
 #&testPutMessages('ParsedMessages');
 #&getUID;
 #&testClearTables;
@@ -36,8 +38,8 @@ my %conf = %{ &getConf("conf/test.conf") };
 #&testGetMessagesToSend;
 #&testPurgeSentMessages;
 #&testGetUID;
-&testGetTable('UnparsedMessages');
-
+#&testGetTable('ParsedMessages');
+&testShowTables();
 #Disconnect from the DB:
 &Mod::DB::disconnect;
 
@@ -57,8 +59,14 @@ sub testMakeTables {
 }
 
 sub testClearTables {
-
     &clearTables;
+}
+
+sub testPutCryptMessages {
+    my $table_name = shift;
+    my @messages = &createMessages(10,2);
+    my $key = &getKey;
+    &putMessages($table_name,&encryptMessages($key,@messages));
 }
 
 sub testPutMessages {
@@ -93,4 +101,7 @@ sub testGetTable {
     print Dumper($table);
 }
 
+sub testShowTables {
+    &showTables(&getKey);
+}
 

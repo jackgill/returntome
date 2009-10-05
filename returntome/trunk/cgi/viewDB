@@ -66,7 +66,7 @@ sub displayTable {
     for (@row_array) {
 	print "<td>";
 	
-	if ($i == 3 ) {
+	if ($i == 2 ) { #KLUDGE
 	print '<div style="overflow:auto; height:200px;width:600px;">';
 	print pre($_);
 	print "</div>";

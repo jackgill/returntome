@@ -15,7 +15,7 @@ use Mod::TieHandle;
 use Mod::Conf;
 use Mod::GetMail;
 use Mod::SendMail;
-#use DateTime;
+use Mod::Crypt;
 
 #Defaults for command line switches:
 my $start_daemon = 1;
@@ -48,9 +48,13 @@ my $logger = Log::Log4perl->get_logger();
 #Send STDERR to logger:
 tie(*STDERR, 'Mod::TieHandle');
 
+#Get encryption key:
+our $key = &getKey;
+#TODO: compare this with a SHA1 hash to make sure it's correct?
+
 #Read encrypted conf file:
 my $conf_file = "conf/talaria.conf.crypt";
-my %conf = %{ &getCipherConf($conf_file) };
+my %conf = %{ &getCipherConf($conf_file, $key) };
 unless (%conf) {
     print "Failed to decrypt $conf_file\n";
     die "\n";
@@ -66,7 +70,7 @@ for (@conf_vars) {
 
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-&clearMessageTables if $clear_tables;
+&clearTables if $clear_tables;
 
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
@@ -81,9 +85,9 @@ if ($pid > 0) { #CLI process
 	log => sub {
 	    system 'cat log/talaria.log';
 	},
-	showdb => \&showTables,
+	showdb => sub {&showTables($key);},
 	makedb => \&makeTables,
-	cleardb => \&clearMessageTables, 
+	cleardb => \&clearTables, 
 	checkmail => sub {
 	    eval {&checkIncoming};
 	    if ($@) {
@@ -128,9 +132,9 @@ if ($pid > 0) { #CLI process
         if ($@) {
 	    $logger->error("Error checking outgoing: $@");
 	}
-	#Once a day, purge all sent messages
+	#Once a day, purge all day old sent messages 
 	if (time > ($last_check + (60 * 60 * 24))) {
-	    eval {&purgeDayOldSentMessages};
+	    eval {&purgeSentMessages(time - 60 * 60 * 24)};
 	    if ($@) {
 		$logger->error("Error purging sent messages: $@");
 	    }
@@ -162,9 +166,9 @@ sub checkIncoming {
     #Parse the messages:
     for my $raw_message (@raw_messages) {
 	my $uid = &getUID;
-	$logger->debug('');
-	$logger->debug('Raw Message $uid:');
-	$logger->debug($raw_message);
+	#$logger->debug('');
+	#$logger->debug("Raw Message $uid:");
+	#$logger->debug($raw_message);
 
 
 	my %message = % { &parseMail($raw_message,$uid) }; 
@@ -180,8 +184,8 @@ sub checkIncoming {
 	}
     }
     #Store the parsed and unparsed messages in the appropriate tables:
-    &putMessages('ParsedMessages',@parsed_messages);
-    &putMessages('UnparsedMessages',@unparsed_messages);
+    &putMessages('ParsedMessages',&encryptMessages($key,@parsed_messages));
+    &putMessages('UnparsedMessages',&encryptMessages($key,@unparsed_messages));
 
     #If we couldn't parse the message, return it to sender:
     &sendMessages(@unparsed_messages);
@@ -193,15 +197,21 @@ sub checkOutgoing {
 
     my $current_time = time;
     my @messages_to_send = &getMessagesToSend($current_time);
-    &sendMessages(@messages_to_send);
+    &sendMessages(&decryptMessages($key,@messages_to_send));
 }
 
 sub sendMessages{
     my @messages = @_;
     return unless @messages;
+    for (@messages) {
+	#TODO: is there a more elegant way to do this?
+	my %message = %$_;
+	$message{address} = &getHeader($message{mail},'From');
+	$_ = \%message;
+    }
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
-    &putMessages('SentMessages',@$sent_ref);
-    &putMessages('UnsentMessages',@$unsent_ref);
+    &putMessages('SentMessages',&encryptMessages($key,@$sent_ref));
+    &putMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
 }
 
 

@@ -10,6 +10,7 @@ use Mod::GetMail;
 use Mod::ParseMail;
 use Mod::TieHandle;
 use Mod::Conf;
+use Mod::Test;
 
 use Email::Simple;
 use DateTime;
@@ -24,30 +25,31 @@ my %conf = %{ &getConf("conf/test.conf") };
 &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
 
 #Create messages:
-#my @return_times;
 my @messages;
-my $nMessages = 2;
-my $minutes = 2;
-
+my $nMinutes = 2;
+my @mail = &createMail(2,$nMinutes);
 print "Sent:\n\n";
 printf "%-20s %-20s\n",'Subject','Return Time';
 print "-"x40,"\n";
-for (my $i = 0; $i < $nMessages; $i++) {
-    my $return_time = time + int(rand($minutes * 60));
-    my $dt = DateTime->from_epoch( epoch => $return_time , time_zone => 'America/Denver');
-    my $return_when = $dt->hms . " " . $dt->mdy;
-    my $subject = "subject $i";
-    #print "Return date for message $i: $return_when\n";
-    #$return_times{$subject} = $return_when;
-    
-    printf "%-20s %-20s\n",$subject,$return_when;
-    push @messages, {uid => 'dummy', address => 'return.to.me.test@gmail.com',mail => "To: return.to.me.test\@gmail.com\nFrom: return.to.me.receive\@gmail.com\nSubject: $subject\n\nR2M: $return_when \nbody $i"};
+for (@mail) {
+    my $email = Email::Simple->new($_);
+    my $to = $email->header('To');
+    my $subject = $email->header('Subject');
+    my %parsed_message = % { &parseMail($_,'dummy') }; 
+    my $return_time = $parsed_message{'return_time'}; 
+    push @messages, {
+	address => $to,
+	uid => 'dummy',
+	mail => $_,
+    };  
+
+    printf "%-20s %-20s\n",$subject,&fromEpoch($return_time);
 }
 
 #Send messages:
 &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
 
-sleep $minutes * 60 + 60;
+sleep $nMinutes * 60 + 60;
 my $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
 my $now = $dt->hms . " " . $dt->mdy;
 print "\nChecked mail at $now\n\n";
