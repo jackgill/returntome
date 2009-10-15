@@ -12,12 +12,51 @@ use Mod::Crypt;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(getConf getCipherConf);
 
+=head1 NAME
+
+    Mod::Conf
+
+=cut
+
+=head1 SYNOPSIS
+
+    my %conf = %{ &getConf("/some/conf.txt") };
+
+=cut
+
+=head1 DESCRIPTION
+
+    A module for reading configuration files.
+
+=cut
+
+=head1 FUNCTIONS
+
+=over 
+
+=item getConf(file)
+
+    Get the unencrypted configuration file.
+    Arguments: The path to the unencrypted configuration file.
+    Returns: A reference to hash containing the key,value pairs from the file.
+
+=cut
+
 sub getConf {
     my $file = shift;
     open(CONFIG,"<$file") or die "Couldn't open $file: $!\n";
     my @file = <CONFIG>;
     return &readConf(\@file);
 }
+
+=item getCipherConf(file, key)
+
+    Get the encrypted configuration file.
+    Arguments: The path to the encrypted configuration file.
+               The encryption key.
+    Returns: A reference to hash containing the key,value pairs from the file.
+
+=cut
 
 sub getCipherConf {
     my $file = shift;
@@ -30,6 +69,14 @@ sub getCipherConf {
     my @file = split("\n",$plain_text);
     return &readConf(\@file);    
 }
+
+
+=item readConf(lines)
+
+    Arguments: A reference to an array of lines from a file of the form key=value.
+    Returns: A reference to hash containing the key,value pairs from the file.
+
+=cut
 
 sub readConf {
     my @file = @{ shift @_ };
@@ -46,5 +93,8 @@ sub readConf {
     return \%conf;
 }
 
+=back
+
+=cut
 
 1;

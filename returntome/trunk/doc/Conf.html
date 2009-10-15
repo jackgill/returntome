@@ -1,0 +1,79 @@
+<?xml version="1.0" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>Mod/Conf.pm</title>
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
+<link rev="made" href="mailto:root@localhost" />
+</head>
+
+<body style="background-color: white">
+
+
+<!-- INDEX BEGIN -->
+<div name="index">
+<p><a name="__index__"></a></p>
+
+<ul>
+
+	<li><a href="#name">NAME</a></li>
+	<li><a href="#synopsis">SYNOPSIS</a></li>
+	<li><a href="#description">DESCRIPTION</a></li>
+	<li><a href="#functions">FUNCTIONS</a></li>
+</ul>
+
+<hr name="index" />
+</div>
+<!-- INDEX END -->
+
+<p>
+</p>
+<h1><a name="name">NAME</a></h1>
+<pre>
+    Mod::Conf</pre>
+<p>
+</p>
+<hr />
+<h1><a name="synopsis">SYNOPSIS</a></h1>
+<pre>
+    my %conf = %{ &amp;getConf(&quot;/some/conf.txt&quot;) };</pre>
+<p>
+</p>
+<hr />
+<h1><a name="description">DESCRIPTION</a></h1>
+<pre>
+    A module for reading configuration files.</pre>
+<p>
+</p>
+<hr />
+<h1><a name="functions">FUNCTIONS</a></h1>
+<dl>
+<dt><strong><a name="getconf" class="item">getConf(file)</a></strong></dt>
+
+<dd>
+<pre>
+    Get the unencrypted configuration file.
+    Arguments: The path to the unencrypted configuration file.
+    Returns: A reference to hash containing the key,value pairs from the file.</pre>
+</dd>
+<dt><strong><a name="getcipherconf" class="item">getCipherConf(file, key)</a></strong></dt>
+
+<dd>
+<pre>
+    Get the encrypted configuration file.
+    Arguments: The path to the encrypted configuration file.
+               The encryption key.
+    Returns: A reference to hash containing the key,value pairs from the file.</pre>
+</dd>
+<dt><strong><a name="readconf" class="item">readConf(lines)</a></strong></dt>
+
+<dd>
+<pre>
+    Arguments: A reference to an array of lines from a file of the form key=value.
+    Returns: A reference to hash containing the key,value pairs from the file.</pre>
+</dd>
+</dl>
+
+</body>
+
+</html>
