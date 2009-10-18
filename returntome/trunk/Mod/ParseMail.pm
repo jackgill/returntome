@@ -4,16 +4,46 @@ use warnings;
 use strict;
 
 use Exporter;
-use Data::Dumper::Simple;
+#use Data::Dumper::Simple;
 use Log::Log4perl;
 use MIME::Parser;
 use File::Path;
 use Email::Simple;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions &getHeader);
+our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions &getHeader &now);
+
+=head1 NAME
+
+    Mod::ParseMail
+
+=cut
+
+=head1 SYNOPSIS
+
+    my %message = %{ &parseMail($raw_message,$uid) };
+
+=cut
+
+=head1 DESCRIPTION
+
+    Parses emails.
+
+=cut
+
+=head1 FUNCTIONS
+
+=over 
+
+=cut
 
 my $logger = Log::Log4perl->get_logger();
+
+=item getHeader(mail, header name) 
+
+    Extract the specified header from the given email.
+
+=cut
 
 sub getHeader {
     my $text = shift;
@@ -21,6 +51,19 @@ sub getHeader {
     my $email = Email::Simple->new($text);
     return $email->header($header);
 }
+
+=item parseMail(raw message, uid)
+
+    Arguments: The email as a string, and a UID
+    Returns: A hashref to a message based on the email.
+    The message looks like:
+    my %message = (
+	mail => $mail,
+	uid => $uid,
+	return_time => $return_time,
+	);
+
+=cut
 
 sub parseMail {
     my $raw_message = shift;
@@ -80,7 +123,6 @@ sub parseMail {
 	
     $mail = $mail . "\n" . join('',@{$entity->body});
     rmtree("mimedump-tmp");
-
 
     #TODO: check that $return_time is EITHER undef OR
     #a valid epoch time
@@ -194,7 +236,6 @@ sub parsePart {
 
 sub parseLine {
     my $line = shift;
-    #print "Parsing line: $line";
     #TODO: The regex below needs to be extended to deal with html messages correctly.
     #it needs to ignore leading and trailing html tags (use non-greedy quantifiers inside < >)
     if ($line =~ /^(\s*(R2M|RETURNTOME):?)/i) {
@@ -207,6 +248,7 @@ sub parseLine {
 	return;
     }
 }
+
 ###########################################3
 #Parse the instructions:
 use Date::Manip;
@@ -219,12 +261,38 @@ sub parseInstructions {
     return $secs;
 }
 
+=item fromEpoch(time)
+
+    Given a time in epoch seconds, return a formatted string representing that time. For safety, the call to DateTime is wrapped in an eval block.
+
+=cut
 use DateTime;
 
 sub fromEpoch {
     my $epoch = shift;
-    my $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
+    my $dt;
+    eval {$dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');};
+    if ($@) {
+	$logger->error($@);
+	return "error";
+    } else {
+	return $dt->hms . " " . $dt->mdy;
+    }
+}
+
+=item now
+
+    Return a string containing the current time.
+
+=cut
+
+sub now {
+    my $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
     return $dt->hms . " " . $dt->mdy;
 }
+
+=back
+
+=cut
 
 1;

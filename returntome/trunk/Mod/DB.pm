@@ -80,7 +80,7 @@ sub disconnect {
 
 sub sql {
     my $statement = shift;
-#    $logger->debug($statement);
+    $logger->debug($statement);
     $sth = $dbh->prepare($statement) or $logger->error("Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
     $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }

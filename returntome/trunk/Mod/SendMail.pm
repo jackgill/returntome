@@ -7,9 +7,7 @@ use Exporter;
 use Data::Dumper::Simple;
 use Net::SMTP::SSL;
 
-
 use Mod::ParseMail;
-
 
 our @ISA = ("Exporter");
 our @EXPORT = qw(&sendMail);
@@ -84,7 +82,6 @@ sub sendMail {
     for (@messages) {
 	my %message = %$_;
 
-	#my $address = $message{'address'};
 	my $address = &getHeader($message{mail},'To');
 	my $mail = $message{mail};
 	my $uid = $message{uid};
@@ -98,6 +95,8 @@ sub sendMail {
 	$smtp->data();
 	$smtp->datasend($mail . "\n");
 	$smtp->dataend();
+
+	#Check the SMTP response:
 	my $smtp_response = $smtp->message;
 	if ($smtp_response =~ /2.0.0 OK/) {
 	    $logger->info("Successfully sent message $uid.");

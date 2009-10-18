@@ -6,8 +6,8 @@ use warnings;
 use 5.010;
 
 use Log::Log4perl;
-use File::Copy;
-use Term::ReadKey;
+#use File::Copy;
+#use Term::ReadKey;
 use Getopt::Long;
 
 use Mod::ParseMail;
@@ -42,6 +42,9 @@ use Mod::Crypt;
 
 =cut
 
+#how often to check incoming and outgoing:
+my $interval = 60; #seconds
+
 #Defaults for command line switches:
 my $no_daemon = '';
 my $clear_tables = '';
@@ -52,6 +55,7 @@ my $test_mode = '';
 	    '--clear-tables' => \$clear_tables,
 	    '--test-mode' => \$test_mode);
 
+#Test mode:
 if ($test_mode) {
     print "Test mode enabled.\n";
     require Mod::Test;
@@ -81,7 +85,8 @@ unless (%conf) {
 my @conf_vars = qw(
 imap_server imap_user imap_pass 
 smtp_server smtp_user smtp_pass 
-db_server db_user db_pass admin_address
+db_server db_user db_pass 
+admin_address
 );
 for (@conf_vars) {
     unless (defined $conf{$_}) {
@@ -91,21 +96,28 @@ for (@conf_vars) {
 
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+
+#Clear tables:
 if ($clear_tables) {
     &clearTables;
     print "Cleared database.\n";
+    $logger->info("Cleared database.");
 }
 
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
 #The child process does the work: daemon
 my $pid = 1;
+
+#Start the daemon...or not.
 if ($no_daemon) {
     print "Daemon was not started.\n";
 } else {
     $pid = fork;
 }
-if ($pid > 0) { #CLI process
+
+#CLI process:
+if ($pid > 0) { 
 
     #define commands:
     my %commands = (
@@ -148,12 +160,16 @@ if ($pid > 0) { #CLI process
 	    print "Unrecognized command\n";
 	}
     }
-} elsif ($pid == 0) { #daemon
+
+} 
+#daemon process:
+elsif ($pid == 0) { 
     $logger->info("Talaria daemon started.");
     print "Talaria daemon started.\n";
 
     my $last_check = 0; #TODO: persist this across Talaria.pl invocations
     while (1) {
+	#Check incoming and outgoing, wrapped in eval blocks for safety:
 	eval {&checkIncoming};
         if ($@) {
 	    $logger->error("Error checking incoming: $@");
@@ -162,6 +178,7 @@ if ($pid > 0) { #CLI process
         if ($@) {
 	    $logger->error("Error checking outgoing: $@");
 	}
+
 	#Once a day, purge all day old sent messages 
 	if (time > ($last_check + (60 * 60 * 24))) {
 	    eval {&purgeSentMessages(time - 60 * 60 * 24)};
@@ -170,7 +187,9 @@ if ($pid > 0) { #CLI process
 	    }
 	    $last_check = time;
 	}
-	sleep 60;
+
+	#Wait:
+	sleep $interval;
     }
 } else {
     die "Couldn't create daemon: $!\n";
@@ -178,6 +197,13 @@ if ($pid > 0) { #CLI process
 
 ##################################################
 #Subroutines:
+
+=item checkIncoming
+    
+    Check the IMAP server for new messages, parse them, store them in the database.
+
+=cut
+
 sub checkIncoming {
     $logger->debug('');
     $logger->debug('Checking incoming...');
@@ -196,23 +222,20 @@ sub checkIncoming {
     #Parse the messages:
     for my $raw_message (@raw_messages) {
 	my $uid = &getUID;
-	#$logger->debug('');
-	#$logger->debug("Raw Message $uid:");
-	#$logger->debug($raw_message);
-
-
-	my %message = % { &parseMail($raw_message,$uid) }; 
+	my %message = %{ &parseMail($raw_message,$uid) }; 
 	my $return_time = $message{'return_time'};
 	if ($return_time) {
-	    #TODO: if &fromEpoch crashes, we're boned and the message gets lost.
-	    #use eval block?
 	    $logger->info("Return date for message $uid: " . &fromEpoch($return_time));
 	    push @parsed_messages, \%message;
 	} else {
-	    $logger->info('Message ' . $message{'uid'} . ' had no readable date.');
+	    $logger->info('Message $uid had no readable date.');
+	    $logger->debug('');
+	    $logger->debug("Raw Message $uid:");
+	    $logger->debug($raw_message);	    
 	    push @unparsed_messages, \%message;
 	}
     }
+
     #Store the parsed and unparsed messages in the appropriate tables:
     &putMessages('ParsedMessages',&encryptMessages($key,@parsed_messages));
     &putMessages('UnparsedMessages',&encryptMessages($key,@unparsed_messages));
@@ -221,12 +244,21 @@ sub checkIncoming {
     &sendMessages(@unparsed_messages);
 }
 
+=item checkOutgoing
+
+    Check the database for any messages whose return times are now in the past.
+    Retrieve those messages and send them.
+
+=cut
+
 sub checkOutgoing {
     $logger->debug('');
     $logger->debug('Checking outgoing...');
 
-    my $current_time = time;
-    my @messages_to_send = &getMessagesToSend($current_time);
+    #Check the database for messages to send:
+    my @messages_to_send = &getMessagesToSend(time);
+
+    #Send the messages:
     &sendMessages(&decryptMessages($key,@messages_to_send));
 }
 
@@ -244,12 +276,22 @@ sub checkOutgoing {
 sub sendMessages {
     my @messages = @_;
     return unless @messages;
+
     #Send the messages:
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
+
     #Store the sent and unsent messages:
     &putMessages('SentMessages',&encryptMessages($key,@$sent_ref));
     &putMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
 }
+
+=item
+
+    mailAdmin(test)
+    Mail the administrator a message.
+    The administrator's email is given in the config file.
+
+=cut
 
 sub mailAdmin {
     my $text = shift;
@@ -260,3 +302,7 @@ sub mailAdmin {
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},\%message);
     if (@$unsent_ref) {$logger->info("Error: failed to mail admin: $text");}
 }
+
+=back
+
+=cut
