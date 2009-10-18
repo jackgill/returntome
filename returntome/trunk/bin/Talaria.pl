@@ -8,6 +8,7 @@ use 5.010;
 use Log::Log4perl;
 use File::Copy;
 use Term::ReadKey;
+use Getopt::Long;
 
 use Mod::ParseMail;
 use Mod::DB;
@@ -17,24 +18,40 @@ use Mod::GetMail;
 use Mod::SendMail;
 use Mod::Crypt;
 
+=head1 NAME
+
+    Talaria.pl
+
+=cut
+
+=head1 SYNOPSIS
+
+    bin/Talaria.pl --no-daemon --clear-tables --test-mode
+
+=cut
+
+=head1 DESCRIPTION
+
+    The master program.
+
+=cut
+
+=head1 FUNCTIONS
+
+=over 
+
+=cut
+
 #Defaults for command line switches:
-my $start_daemon = 1;
-my $clear_tables = 0;
-my $test_mode = 0;
+my $no_daemon = '';
+my $clear_tables = '';
+my $test_mode = '';
 
 #Check command line arguments:
-#TODO: Redo this with GetOpt
-for (@ARGV) {
-    if ($_ eq '--no-daemon'){
-	$start_daemon = 0;
-    } elsif ($_ eq '--clear-tables') {
-	$clear_tables = 1;
-    } elsif ($_ eq '--test-mode') {
-	$test_mode = 1;
-    } else {
-	die "Unrecongized command line argument: $_\n";
-    }
-} 
+&GetOptions('--no-daemon' => \$no_daemon,
+	    '--clear-tables' => \$clear_tables,
+	    '--test-mode' => \$test_mode);
+
 if ($test_mode) {
     print "Test mode enabled.\n";
     require Mod::Test;
@@ -61,7 +78,11 @@ unless (%conf) {
 }
 
 #Check that conf variables are defined:
-my @conf_vars = qw(db_server db_user db_pass);
+my @conf_vars = qw(
+imap_server imap_user imap_pass 
+smtp_server smtp_user smtp_pass 
+db_server db_user db_pass admin_address
+);
 for (@conf_vars) {
     unless (defined $conf{$_}) {
 	die "Configuration error: conf/talaria.conf does not define $_\n";
@@ -70,14 +91,20 @@ for (@conf_vars) {
 
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-&clearTables if $clear_tables;
+if ($clear_tables) {
+    &clearTables;
+    print "Cleared database.\n";
+}
 
 #This program is implemented as 2 processes:
 #The parent process provides terminal I/O: CLI
 #The child process does the work: daemon
 my $pid = 1;
-$pid = fork if $start_daemon;
-
+if ($no_daemon) {
+    print "Daemon was not started.\n";
+} else {
+    $pid = fork;
+}
 if ($pid > 0) { #CLI process
 
     #define commands:
@@ -109,6 +136,9 @@ if ($pid > 0) { #CLI process
 	    $logger->info("Talaria daemon stopped.");
 	    print "Talaria daemon stopped.\n";
 	    exit 0;
+	}
+	elsif (!$line) {
+	    #An empty command does nothing
 	}
 	elsif ($commands{$line}) {
 	    eval { &{$commands{$line}} };
@@ -200,20 +230,33 @@ sub checkOutgoing {
     &sendMessages(&decryptMessages($key,@messages_to_send));
 }
 
-sub sendMessages{
+=item sendMessages(messages)
+
+    For each message, extracts the 'From' header from the 'mail' field, 
+    and sets it as the 'address' field. Calls &Mod::SendMail::sendMail,
+    then encrypts and stores the sent and unsent messages in the database.
+
+    Arguments: A list of hash refs, each referring to an unencrypted message.
+    Returns: None.
+
+=cut
+
+sub sendMessages {
     my @messages = @_;
     return unless @messages;
-    for (@messages) {
-	#TODO: is there a more elegant way to do this?
-	my %message = %$_;
-	$message{address} = &getHeader($message{mail},'From');
-	$_ = \%message;
-    }
+    #Send the messages:
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
+    #Store the sent and unsent messages:
     &putMessages('SentMessages',&encryptMessages($key,@$sent_ref));
     &putMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
 }
 
-
-
-
+sub mailAdmin {
+    my $text = shift;
+    my $mail = "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n";
+    my %message = (
+	mail => $mail,
+	);
+    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},\%message);
+    if (@$unsent_ref) {$logger->info("Error: failed to mail admin: $text");}
+}

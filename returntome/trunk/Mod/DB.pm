@@ -8,16 +8,52 @@ use warnings;
 use Exporter;
 use DBI;
 use Log::Log4perl;
-use Mod::Crypt;
-our @ISA = qw(Exporter);
-#TODO: order these correctly
-our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas &purgeSentMessages);
 use Carp;
+
+use Mod::Crypt;
+
+our @ISA = qw(Exporter);
+our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas &purgeSentMessages);
+
+=head1 NAME
+
+    DB.pm
+
+=cut
+
+=head1 SYNOPSIS
+
+    &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+    &putMessages($table_name,@messages);
+    my @messages = &getMessages('UnparsedMessages','000000000','000000001');
+    my @messages_to_send = &getMessagesToSend(time);
+    &Mod::DB::disconnect;
+
+=cut
+
+=head1 DESCRIPTION
+
+    This module is the interface to the database.
+
+=cut
+
+=head1 FUNCTIONS
+
+=over 
+
+=cut
+
 
 #Global variables...ugh
 my $sth; #DBI statement handle
 my $dbh; #DBI database handle
 my $logger = Log::Log4perl->get_logger();
+
+=item connect(database name, user name, password)
+
+    Connect to the database.
+
+=cut
 
 sub connect {
     my ($db, $user, $pass) = @_;
@@ -25,14 +61,26 @@ sub connect {
     $logger->debug("Connected to database.");
 }
 
+=item disconnect
+
+    Disconnect from the database.
+
+=cut
+
 sub disconnect {
     $dbh->disconnect;
     $logger->debug("Disconnected from database.");
 }
 
+=item sql(statement)
+
+    Execute a generic SQL statement. The text of the statement is sent to the logger.
+
+=cut
+
 sub sql {
     my $statement = shift;
-    $logger->debug($statement);
+#    $logger->debug($statement);
     $sth = $dbh->prepare($statement) or $logger->error("Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
     $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }
@@ -77,7 +125,10 @@ use Text::Wrap;
 sub showTable {
     my $table = shift;
     my $key = shift;
-    &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table'");  #this returns a table with one column. Each row is the name of a column in $table_name
+
+    #Get the column names:
+    #Get a table with one column. Each row is the name of a column in $table
+    &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table'");  
     my @col_refs = @{ $sth->fetchall_arrayref }; #this is an array of references to arrays
     my @col_names; #this will hold the names of the columns
     for my $col_ref (@col_refs) {
@@ -85,14 +136,12 @@ sub showTable {
 	my $col_name = $row[0]; #get the first (and only) column in the row
 	push @col_names, $col_name;
     }
-    #my $last_col = pop @col_names;
-    #my $format = "%-20s | " x @col_names;
-    #printf $format,@col_names;
-    #printf "%-40s|", $last_col;
-    #print "\n","-" x (23*@col_names),"\n";
+
+    #Print the headers:
     my $format = "%-9s | %-10s | %-60s\n";
     printf $format,@col_names;
     print "-" x 88,"\n";
+
     #Now get the entire table:
     &sql("SELECT * FROM $table");
     my @row;

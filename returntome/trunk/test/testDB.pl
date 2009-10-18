@@ -33,7 +33,7 @@ my %conf = %{ &getConf("conf/test.conf") };
 #&testPutCryptMessages('ParsedMessages');
 #&testPutMessages('ParsedMessages');
 #&getUID;
-#&testClearTables;
+&testClearTables;
 #&testGetMessages;
 #&testGetMessagesToSend;
 #&testPurgeSentMessages;
@@ -64,7 +64,7 @@ sub testClearTables {
 
 sub testPutCryptMessages {
     my $table_name = shift;
-    my @messages = &createMessages(10,2);
+    my @messages = &createMessages(2,2);
     my $key = &getKey;
     &putMessages($table_name,&encryptMessages($key,@messages));
 }

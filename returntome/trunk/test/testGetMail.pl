@@ -14,7 +14,9 @@ use Log::Log4perl;
 Log::Log4perl::init('conf/log4perl_test.conf');
 tie(*STDERR, 'Mod::TieHandle');
 my %conf = %{&getConf("conf/test.conf")};
-my @messages = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
+my $user = $ARGV[0];
+die "Usage: $0 email address\n" unless $user;
+my @messages = &getMail($conf{imap_server},$user,$conf{imap_pass},0);
 die "No messages\n" unless (@messages);
 for (@messages) {
     print;

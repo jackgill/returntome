@@ -16,16 +16,15 @@ sub getMail {
     my $server = shift;
     my $user = shift;
     my $pass = shift;
+    my $keep = shift;
 
     my $logger = Log::Log4perl->get_logger();
 
-    $logger->debug("Called Mod::GetMail::getMail");
+    #$logger->debug("Called Mod::GetMail::getMail");
     unless ($server && $user && $pass) {
 	$logger->error("GetMail did not receive necessary arguments.");
 	return ();
     }
-
-
     
     #Create the IMAP client
     my $imap = Net::IMAP::Simple::SSL->new($server);
@@ -46,7 +45,7 @@ sub getMail {
     my @raw_messages;
     for (my $iMessage = 1; $iMessage <= $nMessages; $iMessage++) {
 	my $message = $imap->get( $iMessage );
-	$imap->delete($iMessage);
+	$imap->delete($iMessage) unless $keep;
 	my $raw_message = join '' , @$message;
 	push @raw_messages, $raw_message;
     }
