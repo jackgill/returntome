@@ -228,7 +228,7 @@ sub checkIncoming {
 	    $logger->info("Return date for message $uid: " . &fromEpoch($return_time));
 	    push @parsed_messages, \%message;
 	} else {
-	    $logger->info('Message $uid had no readable date.');
+	    $logger->info("Message $uid had no readable date.");
 	    $logger->debug('');
 	    $logger->debug("Raw Message $uid:");
 	    $logger->debug($raw_message);	    
@@ -264,8 +264,7 @@ sub checkOutgoing {
 
 =item sendMessages(messages)
 
-    For each message, extracts the 'From' header from the 'mail' field, 
-    and sets it as the 'address' field. Calls &Mod::SendMail::sendMail,
+    Calls &Mod::SendMail::sendMail,
     then encrypts and stores the sent and unsent messages in the database.
 
     Arguments: A list of hash refs, each referring to an unencrypted message.

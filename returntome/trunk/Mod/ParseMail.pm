@@ -4,11 +4,14 @@ use warnings;
 use strict;
 
 use Exporter;
+
 #use Data::Dumper::Simple;
 use Log::Log4perl;
 use MIME::Parser;
 use File::Path;
 use Email::Simple;
+
+use Mod::Ad;
 
 our @ISA = ("Exporter");
 our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions &getHeader &now);
@@ -167,7 +170,8 @@ sub parseMulti {
 	my $error_message = $plain_lines[0];
 	my @html_lines = @{ $html_part->body };
 	chomp $error_message;
-	unshift @html_lines, "<b>$error_message</b><br>\n";
+	unshift @html_lines, "<b>$error_message</b><br><br>\n";
+
 	my $bh = $html_part->bodyhandle;
 	my $IO = $bh->open("w");
 	if (not $IO) {
@@ -180,8 +184,30 @@ sub parseMulti {
 	    $logger->error("Could not close MIME entity body");
 	    return;
 	}
+    } else { #parsed messages get ads
+	&appendAd($html_part);
     }
+
     return $return_time;
+}
+
+sub appendAd {
+    my $entity = shift;
+    my @lines = @{ $entity->body };
+    
+    push @lines, '-' x 70 . '<br>',&getAd;
+    my $bh = $entity->bodyhandle;
+    my $IO = $bh->open("w");
+    if (not $IO) {
+	$logger->error("Could not open MIME entity body");
+	return;
+    }
+    $IO->print($_) for (@lines);
+    my $close = $IO->close; 
+    if (not $close) { #TODO: check that this works correctly
+	$logger->error("Could not close MIME entity body");
+	return;
+    }
 }
 
 sub parseEntity {
@@ -197,6 +223,7 @@ sub parseEntity {
 	$logger->error("Could not open MIME entity body");
 	return;
     }
+
     $IO->print($_) for (@text_lines);
     my $close = $IO->close; 
     if (not $close) { #TODO: check that this works correctly
@@ -222,13 +249,14 @@ sub parsePart {
 	$return_date = &parseInstructions($instructions);
 	if ($return_date) {
 	    $logger->debug("Return date: $return_date");
+	    
 	} else {
 	    $logger->debug("Could not understand instructions");
-	    unshift @part, "Sorry, we could not understand these instructions.\n";
+	    unshift @part, "Sorry, we could not understand these instructions.\n\n";
 	}
     } else {
 	$logger->debug("Could not find instructions");
-	unshift @part, "Sorry, we could not find instructions in this message.\n";
+	unshift @part, "Sorry, we could not find instructions in this message.\n\n";
     }
 
     return $return_date, \@part;

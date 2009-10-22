@@ -28,8 +28,8 @@ my %conf = %{ &getConf("conf/test.conf") };
 &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
 
 #Create mail:
-my $nMessages = 20; 
-my $nMinutes = 120;
+my $nMessages = 2; 
+my $nMinutes = 2;
 my @mail = &createMail($nMessages,$nMinutes);
 
 my %requested;
