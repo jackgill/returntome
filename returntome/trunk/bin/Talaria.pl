@@ -42,18 +42,19 @@ use Mod::Crypt;
 
 =cut
 
-#how often to check incoming and outgoing:
-my $interval = 60; #seconds
-
 #Defaults for command line switches:
 my $no_daemon = '';
+my $no_cli = '';
 my $clear_tables = '';
 my $test_mode = '';
 
 #Check command line arguments:
-&GetOptions('--no-daemon' => \$no_daemon,
-	    '--clear-tables' => \$clear_tables,
-	    '--test-mode' => \$test_mode);
+&GetOptions(
+    '--no-daemon' => \$no_daemon,
+    '--clear-tables' => \$clear_tables,
+    '--test-mode' => \$test_mode,
+    '--no-cli' =>\$no_cli,
+    );
 
 #Test mode:
 if ($test_mode) {
@@ -74,7 +75,7 @@ our $key = &getKey;
 #TODO: compare this with a SHA1 hash to make sure it's correct?
 
 #Read encrypted conf file:
-my $conf_file = "conf/talaria.conf.crypt";
+my $conf_file = "conf/talaria.conf";
 my %conf = %{ &getCipherConf($conf_file, $key) };
 unless (%conf) {
     print "Failed to decrypt $conf_file\n";
@@ -86,6 +87,7 @@ my @conf_vars = qw(
 imap_server imap_user imap_pass 
 smtp_server smtp_user smtp_pass 
 db_server db_user db_pass 
+interval
 admin_address
 );
 for (@conf_vars) {
@@ -118,6 +120,7 @@ if ($no_daemon) {
 
 #CLI process:
 if ($pid > 0) { 
+    exit if $no_cli; #TODO: test this!
 
     #define commands:
     my %commands = (
@@ -162,8 +165,9 @@ if ($pid > 0) {
     }
 
 } 
+
 #daemon process:
-elsif ($pid == 0) { 
+if ($pid == 0) { 
     $logger->info("Talaria daemon started.");
     print "Talaria daemon started.\n";
 
@@ -189,7 +193,7 @@ elsif ($pid == 0) {
 	}
 
 	#Wait:
-	sleep $interval;
+	sleep $conf{interval};
     }
 } else {
     die "Couldn't create daemon: $!\n";
