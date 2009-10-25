@@ -8,9 +8,10 @@ use DBI;
 use CGI qw(:standard *table); #function based interface to CGI module, start_table and end_table tags
 use CGI::Carp qw(fatalsToBrowser); #send errors to browser as well as server error log
 
-use lib '/home/jack/returntome/trunk/';
+use lib '..';
 use Mod::DB;
 use Mod::Conf;
+use Mod::Crypt;
 
 my @tables = keys %{ &getSchemas };
 #Set up the display page:
@@ -39,9 +40,10 @@ print end_html();
 
 sub displayTable {
     my $table_name = shift;
+    my $key = 'GoBuff$123';
 #Connect to the database:
 #Read conf file:
-    my %conf = %{ &getConf("/home/jack/returntome/trunk/conf/talaria.conf") };
+    my %conf = %{ &getCipherConf("../conf/cli.conf",$key) };
 #Check that conf variables are defined:
     my @conf_vars = qw(db_server db_user db_pass);
     for (@conf_vars) {
@@ -67,9 +69,10 @@ sub displayTable {
 	print "<td>";
 	
 	if ($i == 2 ) { #KLUDGE
-	print '<div style="overflow:auto; height:200px;width:600px;">';
-	print pre($_);
-	print "</div>";
+	    print '<div style="overflow:auto; height:200px;width:600px;">';
+	    $_ = &decrypt($key,$_);
+	    print pre($_);
+	    print "</div>";
 	} else {
 	    print;
 	}

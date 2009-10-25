@@ -74,9 +74,10 @@ sub parseMail {
     
     #parse the mail:
     my $parser = new MIME::Parser;
-    (-d "mimedump-tmp") or mkdir "mimedump-tmp",0755 or die "mkdir: $!";
-    (-w "mimedump-tmp") or die "can't write to directory";
-    $parser->output_dir("mimedump-tmp");
+    my $tmp_dir = '/tmp/mimedump/';
+    (-d $tmp_dir) or mkdir $tmp_dir,0755 or die "mkdir: $!";
+    (-w $tmp_dir) or die "can't write to directory";
+    $parser->output_dir($tmp_dir);
     my $entity = $parser->parse_data($raw_message);    
     
     
@@ -125,7 +126,7 @@ sub parseMail {
     }
 	
     $mail = $mail . "\n" . join('',@{$entity->body});
-    rmtree("mimedump-tmp");
+    rmtree($tmp_dir);
 
     #TODO: check that $return_time is EITHER undef OR
     #a valid epoch time

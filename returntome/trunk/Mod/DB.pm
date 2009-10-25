@@ -87,7 +87,7 @@ sub sql {
 
 my @message_tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
 sub getSchemas {
-    my $message_schema = "(uid INTEGER(9) ZEROFILL, return_time INTEGER(10),mail BLOB)";
+    my $message_schema = "(uid INTEGER(9) ZEROFILL, return_time INTEGER(10),mail LONGBLOB)";
     my %schemas = (
 	'ParsedMessages' => $message_schema,
 	'UnparsedMessages' => $message_schema,

@@ -8,6 +8,7 @@ use warnings;
 use Exporter;
 use Crypt::CBC;
 use Term::ReadKey;
+use Carp;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(encrypt decrypt getKey encryptMessages decryptMessages);
@@ -24,7 +25,7 @@ sub encrypt {
 sub decrypt {
     my $key = shift;
     my $encrypted = shift;
-
+    croak "Must supply encryption key and encrypted text" unless ($key && $encrypted);
     my $cipher = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael');
     my $plain_text = $cipher->decrypt($encrypted);
     return $plain_text;

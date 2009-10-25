@@ -86,8 +86,8 @@ sub sendMail {
 	my $mail = $message{mail};
 	my $uid = $message{uid};
 
-	$logger->debug("Sending message:");
-	$logger->debug(Dumper(%message));
+	#$logger->debug("Sending message:");
+	#$logger->debug(Dumper(%message));
 
 	#TODO: check return value on these?
 	$smtp->mail($from . "\n");
