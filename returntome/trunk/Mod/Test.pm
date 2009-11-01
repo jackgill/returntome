@@ -16,7 +16,7 @@ use Data::Dumper::Simple;
 use DateTime;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&createMail &printLine);
+our @EXPORT = qw(&createMail &printLine &createMessages);
 our @EXPORT_OK = qw(&sendMail &getMail);
 
 

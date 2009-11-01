@@ -8,7 +8,6 @@ use warnings;
 use Log::Log4perl;
 use Getopt::Long;
 use Proc::Daemon;
-use Proc::PID::File;
 
 use Mod::ParseMail;
 use Mod::DB;
@@ -17,6 +16,9 @@ use Mod::Conf;
 use Mod::GetMail;
 use Mod::SendMail;
 use Mod::Crypt;
+
+#Only one instance at a time, please:
+die "Talariad is already running\n" if (-e "$pwd/talariad.pid");
 
 #Defaults for command line switches:
 my $test_mode = '';
@@ -30,19 +32,22 @@ my $test_mode = '';
 our $key = &getKey;
 #TODO: compare this with a SHA1 hash to make sure it's correct?
 
+#get the CWD for future reference:
 my $pwd = $ENV{PWD};
 
+#daemonize:
 Proc::Daemon::Init();
-#TODO: check if a talariad is running?
+
+#create PID file:
+open(my $out,">$pwd/talariad.pid");
+print $out $$;
+close $out;
 
 #initialize the logger:
 Log::Log4perl::init_once("$pwd/conf/log4perl_daemon.conf");
 my $logger = Log::Log4perl->get_logger();
 
 $logger->info("PID: $$");
-
-
-
 $logger->info("Talaria daemon started.");
 
 #Send STDERR to logger:
@@ -81,12 +86,10 @@ for (@conf_vars) {
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
 
 #Set up signal handlers:
-$SIG{HUP}  = sub { $logger->info("Caught SIGHUP"); &quit};
-$SIG{INT}  = sub { $logger->info("Caught SIGINT"); &quit };
-$SIG{QUIT} = sub { $logger->info("Caught SIGQUIT"); &quit };
-$SIG{TERM} = sub { $logger->info("Caught SIGTERM"); &quit };
-
-
+$SIG{HUP}  = sub { &quit("SIGHUP") };
+$SIG{INT}  = sub { &quit("SIGINT") };
+$SIG{QUIT} = sub { &quit("SIGQUIT") };
+$SIG{TERM} = sub { &quit("SIGTERM") };
 
 my $last_check = 0; #TODO: persist this across Talaria.pl invocations
  
@@ -205,7 +208,7 @@ sub sendMessages {
 
 =item
 
-    mailAdmin(test)
+    mailAdmin(text)
     Mail the administrator a message.
     The administrator's email is given in the config file.
 
@@ -216,14 +219,19 @@ sub mailAdmin {
     my $mail = "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n";
     my %message = (
 	mail => $mail,
+	uid => 'mailadmin', #else Mod::SendMail complains
 	);
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},\%message);
     if (@$unsent_ref) {$logger->info("Error: failed to mail admin: $text");}
 }
 
 sub quit {
+    my $signal = shift;
+    $logger->info("Caught $signal.");
     $logger->info('Talaria daemon exiting.');
     &Mod::DB::disconnect;
+    &mailAdmin("talariad went down at " . &now . " due to $signal.");
+    unlink("$pwd/talariad.pid");
     exit 0;
 }
 

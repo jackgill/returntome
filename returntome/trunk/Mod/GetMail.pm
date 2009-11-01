@@ -29,6 +29,11 @@ sub getMail {
     #Create the IMAP client
     my $imap = Net::IMAP::Simple::SSL->new($server);
     
+    unless($imap) {
+	$logger->error("Could not create Net::IMAP::Simple::SSL object.");
+	return ();
+    }
+    
     #Log in to the IMAP server
     unless ($imap->login($user => $pass)) {
 	$logger->error("Could not login to IMAP server: " . $imap->errstr);

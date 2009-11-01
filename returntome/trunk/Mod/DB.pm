@@ -68,6 +68,7 @@ sub connect {
 =cut
 
 sub disconnect {
+    $sth->finish;
     $dbh->disconnect;
     $logger->debug("Disconnected from database.");
 }
@@ -87,7 +88,7 @@ sub sql {
 
 my @message_tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
 sub getSchemas {
-    my $message_schema = "(uid INTEGER(9) ZEROFILL, return_time INTEGER(10),mail LONGBLOB)";
+    my $message_schema = "(uid INTEGER(9) ZEROFILL PRIMARY KEY, return_time INTEGER(10),mail LONGBLOB)";
     my %schemas = (
 	'ParsedMessages' => $message_schema,
 	'UnparsedMessages' => $message_schema,
@@ -162,7 +163,6 @@ sub putMessages {
 	my $return_time = $message{'return_time'};
 	$return_time = 0 unless $return_time;
 	my $mail = $message{'mail'};
-	#$logger->debug("INSERT INTO $table VALUES ('$uid','$return_time','$mail');");
 	my $put_msg = $dbh->prepare("INSERT INTO $table VALUES (?,?,?);");
 	if($put_msg) {
 	$put_msg->execute($uid,$return_time,$mail) or $logger->error("Error executing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
@@ -197,7 +197,7 @@ sub getMessagesToSend {
     my $return_time = shift;
 
     my @messages;
-
+    #fetch the messages:
     &sql("SELECT * FROM ParsedMessages WHERE return_time < $return_time;");
     
     my @row;
@@ -209,9 +209,9 @@ sub getMessagesToSend {
 	    );
 	push @messages, \%message;
     }
+
     #delete the messages:
     &sql("DELETE FROM ParsedMessages WHERE return_time < $return_time;");
-    #TODO: Is there a more efficient way to do this?
 
     return @messages;
 }
@@ -222,7 +222,7 @@ sub purgeSentMessages {
 }
 
 sub getUID {
-    &sql("SELECT * FROM UID;");
+    &sql("SELECT uid FROM UID;");
     my @row = $sth->fetchrow_array();
     &sql("update UID SET uid = uid + 1;");
     return $row[0];
