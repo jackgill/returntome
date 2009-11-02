@@ -27,19 +27,18 @@ my %conf = %{ &getConf("conf/test.conf") };
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
 
 #Run tests:
-#&testPutMessages('UnparsedMessages');
 #&testGetSchemas;
 #&testMakeTables;
-&testPutCryptMessages('ParsedMessages');
+&testClearTables;
 #&testPutMessages('ParsedMessages');
-#&getUID;
-#&testClearTables;
-#&testGetMessages;
-&testGetMessagesToSend;
-#&testPurgeSentMessages;
+#&testGetMessageByUID;
+#&testDeleteMessageByUID;
+#&testGetMessagesByTime;
+#&testDeleteMessagesByTime;
 #&testGetUID;
 #&testGetTable('ParsedMessages');
-&testShowTables();
+#&testShowTables();
+
 #Disconnect from the DB:
 &Mod::DB::disconnect;
 
@@ -62,31 +61,29 @@ sub testClearTables {
     &clearTables;
 }
 
-sub testPutCryptMessages {
+sub testPutMessages {
     my $table_name = shift;
     my @messages = &createMessages(2,2);
     my $key = &getKey;
     &putMessages($table_name,&encryptMessages($key,@messages));
 }
 
-sub testPutMessages {
-    my $table_name = shift;
-    my @messages = &createMessages(2,2);
-    &putMessages($table_name,@messages);
+sub testGetMessageByUID {
+    my %message = &getMessageByUID('ParsedMessages','000000000');
+    print Dumper(%message);
 }
 
-sub testGetMessages {
-    my @messages = &getMessages('UnparsedMessages','000000000','000000001');
+sub testDeleteMessageByUID {
+    &deleteMessageByUID('ParsedMessages','000000000');
+}
+
+sub testGetMessagesByTime {
+    my @messages = &getMessagesByTime('ParsedMessages',time);
     print Dumper(@messages);
 }
 
-sub testGetMessagesToSend {
-    my @messages = &getMessagesToSend(time);
-    print Dumper(@messages);
-}
-
-sub testPurgeSentMessages {
-    &purgeSentMessages(time);
+sub testDeleteMessagesByTime {
+    &deleteMessagesByTime('ParsedMessages',time);
 }
 
 sub testGetUID {

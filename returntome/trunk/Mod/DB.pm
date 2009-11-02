@@ -13,7 +13,7 @@ use Carp;
 use Mod::Crypt;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &makeTables &clearTables &showTables &putMessages &getMessages &getMessagesToSend &getUID &getTable &getSchemas &purgeSentMessages);
+our @EXPORT = qw(&connect &disconnect &getSchemas &makeTables &clearTables &showTables &putMessages &getMessageByUID &deleteMessageByUID &getMessagesByTime &deleteMessagesByTime &getUID &getTable);
 
 =head1 NAME
 
@@ -86,6 +86,14 @@ sub sql {
     $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }
 
+=item getSchemas
+
+    Get the schemas for the various database tables.
+    Arguments: None.
+    Returns: A hashref whose referent maps table names to strings describing the columns suitable for use in a MAKE TABLE statement.
+
+=cut
+
 my @message_tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
 sub getSchemas {
     my $message_schema = "(uid INTEGER(9) ZEROFILL PRIMARY KEY, return_time INTEGER(10),mail LONGBLOB)";
@@ -99,14 +107,32 @@ sub getSchemas {
     return \%schemas
 } 
 
+
+=item makeTables
+
+    Delete all existing tables and create new ones.
+    Arguments: None.
+    Returns: None.
+
+=cut
+
 sub makeTables {
     my %schemas = %{ &getSchemas };
     for my $table (keys %schemas) {
-	&sql("DROP TABLE $table");
+	&sql("DROP TABLE $table"); #TODO add "if exists $table"
 	&sql("CREATE TABLE $table $schemas{$table}");
     }
     &sql("INSERT INTO UID VALUES ('000000000');");
 }
+
+=item clearTables
+
+    DEPRECATED as redundant with &makeTables.
+    Clear all tables.
+    Arguments: None.
+    Returns: None.
+
+=cut
 
 sub clearTables {
     for (@message_tables) {
@@ -115,6 +141,15 @@ sub clearTables {
     &sql("UPDATE UID SET uid = 000000000;");
 }
 
+=item showTables(key)
+
+    DEPRECATED in favor of cgi/viewDB (&Mod::DB::getTable)
+    Print the contents of all the message tables to STDOUT. Calls &showTable.
+    Arguments: Encryption key
+    Returns: None.
+
+=cut
+
 sub showTables {
     my $key = shift;
     for (@message_tables) {
@@ -122,6 +157,16 @@ sub showTables {
 	&showTable($_,$key);
     }
 }
+
+=item showTable(table name, encryption key)
+
+    DEPRECATED in favor of cgi/viewDB (&Mod::DB::getTable)
+    Print the contents of the specified table to STDOUT.
+    Arguments: Table name, encryption key.
+    Returns: None.
+
+=cut
+
 use Text::Wrap;
 sub showTable {
     my $table = shift;
@@ -155,6 +200,14 @@ sub showTable {
     }
 }
 
+=item putMessages(table name, messages)
+
+    Insert a list of messages into the specified table.
+    Arguments: The first argument is the name of the table. All subsequent arguments should be message hashrefs.
+    Returns: None.
+
+=cut
+
 sub putMessages {
     my $table = shift;
     for (@_) {
@@ -173,53 +226,102 @@ sub putMessages {
     }
 }
 
-sub getMessages {
-    my $table = shift;
-    #TODO: error checking: make sure $table is a valid table name
-    my @uids = @_;
-    my @messages;
-    for my $uid (@uids) {
-	&sql("SELECT * FROM $table WHERE UID = $uid;");
-	my @row = $sth->fetchrow_array();
-	my %message = (
-	    uid => $row[0],
-	    return_time => $row[1],
-	    mail => $row[2],
-	);
-	push @messages, \%message;
-	#delete the message:
-	&sql("DELETE FROM $table WHERE UID = $uid;");
-    }
-    return @messages;
+=item getMessageByUID(table name, uid)
+
+    Retrieve the message with the specified UID from the specified table.
+    Arguments: The first argument is the name of the table. All subsequent arguments should be UIDs.
+    Returns: The message hash as a list.
+
+=cut
+
+sub getMessageByUID {
+    my $table_name = shift;
+    my $uid = shift;
+
+    &sql("SELECT * FROM $table_name WHERE UID = $uid;");
+    my @row = $sth->fetchrow_array();
+    my %message = &rowToMessage(@row);
+    return %message;
 }
 
-sub getMessagesToSend {
+=item deleteMessageByUID(table name, uid)
+
+    Delete the specified message from the specified table.
+    Arguments: table name, UID.
+    Returns: None.
+
+=cut
+
+sub deleteMessageByUID {
+    my $table_name = shift;
+    my $uid = shift;
+    &sql("DELETE FROM $table_name WHERE UID = $uid;");
+}
+
+=item getMessagesByTime(table name, time)
+
+    Retrieve all messages from the specified table whose return time is less than the specified time.
+    Arguments: Table name, time in epoch seconds.
+    Returns: A list of message hashrefs.
+
+=cut
+
+sub getMessagesByTime {
+    my $table_name = shift;
     my $return_time = shift;
 
     my @messages;
-    #fetch the messages:
-    &sql("SELECT * FROM ParsedMessages WHERE return_time < $return_time;");
+
+    &sql("SELECT * FROM $table_name WHERE return_time < $return_time;");
     
     my @row;
     while (@row = $sth->fetchrow_array()) {
-	my %message = (
-	    uid => $row[0],
-	    return_time => $row[1],
-	    mail => $row[2],
-	    );
+	my %message = &rowToMessage(@row);
 	push @messages, \%message;
     }
-
-    #delete the messages:
-    &sql("DELETE FROM ParsedMessages WHERE return_time < $return_time;");
 
     return @messages;
 }
 
-sub purgeSentMessages {
-    my $purge_time = shift;
-    &sql("DELETE FROM SentMessages WHERE return_time < $purge_time;");    
+=item deleteMessagesByTime(table name, time)
+	
+    Delete messages from the specified table whose return time is less than the given time.
+    Arguments: Table name, time in epoch seconds.
+    Returns: None.
+
+=cut
+
+sub deleteMessagesByTime {
+    my $table_name = shift;
+    my $delete_time = shift;
+    &sql("DELETE FROM $table_name WHERE return_time < $delete_time;");    
 }
+
+=item rowToMessage(row)
+
+    Convert a row from a message table to a message hash.
+    Arguments: The row, as a list.
+    Returns: The message hash, as a list.
+
+=cut
+
+sub rowToMessage {
+    my @row = @_;
+    my %message = (
+	uid => $row[0],
+	return_time => $row[1],
+	mail => $row[2],
+	);
+    return %message;
+}
+
+=item getUID
+
+    Get a Unique Identifier (UID): A nine digit integer guaranteed to be unique.
+    Arguments: None.
+    Returns: the UID.
+  
+=cut
 
 sub getUID {
     &sql("SELECT uid FROM UID;");
@@ -227,6 +329,14 @@ sub getUID {
     &sql("update UID SET uid = uid + 1;");
     return $row[0];
 }
+
+=item getTable(table name) 
+
+    Get a 2D array represent the specified table. No decryption is performed.
+    Arguments: Table name
+    Returns: An array ref. Each element of the referent is an array ref to a row.
+
+=cut
 
 sub getTable {
     my $table_name = shift;
@@ -252,5 +362,9 @@ sub getTable {
     }
     return \@table;
 }
+
+=back
+
+=cut
 
 1;

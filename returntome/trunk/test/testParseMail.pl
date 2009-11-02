@@ -22,8 +22,8 @@ my $raw_message = join '', @lines;
 my %message = %{ &parseMail($raw_message)};
 my $return_date = $message{'return_time'};
 if ($return_date) {
-    print "Return date: ",&fromEpoch($return_date),"\n";
+    print "Return time: ",&fromEpoch($return_date),"\n";
 } else {
-    print "Return date not found, see log for details.\n";
+    print "Return time not found.\n";
 }
-print "Message: ",Dumper(%message);
+#print "Message: ",Dumper(%message);

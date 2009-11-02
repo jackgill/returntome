@@ -104,7 +104,8 @@ sub createMessages {
 	my $return_time = time + int(rand($nMinutes * 60));
 	my $dt = DateTime->from_epoch( epoch => $return_time, time_zone => 'America/Denver');
 	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i";
-	my $uid = 0;#&getUID;
+	#my $uid = 0;
+	my $uid = &getUID;
 	push @messages, {uid => $uid, 
 			 return_time => $return_time,
 			 mail => "To: return.to.me.receive\@gmail.com\nFrom: return.to.me.test\@gmail.com\nSubject: subject ${i}\n\nR2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i",

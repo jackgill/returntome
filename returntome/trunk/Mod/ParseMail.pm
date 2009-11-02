@@ -8,12 +8,10 @@ use Exporter;
 use Log::Log4perl;
 use MIME::Parser;
 use File::Path;
-use Email::Simple;
-
 use Mod::Ad;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(&parseMail &fromEpoch &parseInstructions &getHeader &now);
+our @EXPORT = qw(&getHeader &parseMail &parseInstructions &fromEpoch &now);
 
 =head1 NAME
 
@@ -47,6 +45,8 @@ my $logger = Log::Log4perl->get_logger();
 
 =cut
 
+use Email::Simple;
+
 sub getHeader {
     my $text = shift;
     my $header = shift;
@@ -72,8 +72,6 @@ sub getHeader {
 sub parseMail {
     my $raw_message = shift;
     my $uid = shift;
-    
-    #TODO: raw message should be saved.
 
     #Create the parser:
     my $parser = new MIME::Parser;
@@ -229,7 +227,7 @@ sub parseText {
     for (@lines) {
 	if (/^(\s*(R2M|RTM|RETURNTOME):?)/i) {
 	    my $flag = $1;
-	    my $instructions = $_;
+	    $instructions = $_;
 	    chomp $instructions;# =~ s/\n//;
 	    $instructions =~ s/$flag//;
 	    last;
@@ -256,6 +254,14 @@ sub parseText {
     return $return_time;
 }
 
+=item readEntity(MIME entity)
+    
+    Get an array of lines representing the body of a MIME::Entity.
+    Arguments: A reference to a MIME::Entity.
+    Returns: A array of lines.
+
+=cut
+
 sub readEntity {
     my $entity = shift;
     my $bh = $entity->bodyhandle;
@@ -273,6 +279,14 @@ sub readEntity {
     } 
     return @lines;
 }
+
+=item writeEntity(entity, lines_ref)
+
+    Write an array of lines to the body of a MIME::Entity.
+    Arguments: A reference to a MIME::Entity, a reference to an array of lines.
+    Returns: 1 if write succeeded, 0 if write failed.
+
+=cut
 
 sub writeEntity {
     my $entity = shift;
@@ -292,8 +306,15 @@ sub writeEntity {
     } 
     return 1;
 }
-###########################################3
-#Parse the instructions:
+
+=item parseInstructions(instructions)
+
+    Extract a return time from the given instructions.
+    Arguments: A string containing the instructions.
+    Returns: Either a time in epoch seconds or undef.
+
+=cut
+
 use Date::Manip;
 
 sub parseInstructions {
@@ -331,8 +352,7 @@ sub fromEpoch {
 =cut
 
 sub now {
-    my $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
-    return $dt->hms . " " . $dt->mdy;
+    return &fromEpoch(time);
 }
 
 =back

@@ -21,6 +21,7 @@ our @EXPORT = qw(getConf getCipherConf);
 =head1 SYNOPSIS
 
     my %conf = %{ &getConf("/some/conf.txt") };
+    my %conf = %{ &getCipherConf("/some/conf.txt","password") };
 
 =cut
 
@@ -69,7 +70,6 @@ sub getCipherConf {
     my @file = split("\n",$plain_text);
     return &readConf(\@file);    
 }
-
 
 =item readConf(lines)
 

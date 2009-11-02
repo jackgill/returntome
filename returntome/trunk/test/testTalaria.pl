@@ -12,6 +12,7 @@ use Mod::TieHandle;
 use Mod::Conf;
 use Mod::Test;
 
+use Data::Dumper::Simple;
 #TestTalaria.pl
 #Send a set of test messages to the Talaria program
 #Wait for their return
@@ -35,17 +36,18 @@ my @mail = &createMail($nMessages,$nMinutes);
 my %requested;
 my @messages;
 for (@mail) {
+    #Convert the mail to a message ready for sending:
+    push @messages, {
+	uid => 'dummy',
+	mail => $_,
+    };  
+
     #Load the requested return time into a hash keyed by subject:
     my $subject = &getHeader($_,'Subject');
     my %parsed_message = % { &parseMail($_,'dummy') }; 
     my $return_time = $parsed_message{'return_time'};
     $requested{$subject} = $return_time;
 
-    #Convert the mail to a message ready for sending:
-    push @messages, {
-	uid => 'dummy',
-	mail => $_,
-    };  
 }
 
 #Send messages:

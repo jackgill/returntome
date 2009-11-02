@@ -17,6 +17,9 @@ use Mod::GetMail;
 use Mod::SendMail;
 use Mod::Crypt;
 
+#get the CWD for future reference:
+my $pwd = $ENV{PWD};
+
 #Only one instance at a time, please:
 die "Talariad is already running\n" if (-e "$pwd/talariad.pid");
 
@@ -32,15 +35,12 @@ my $test_mode = '';
 our $key = &getKey;
 #TODO: compare this with a SHA1 hash to make sure it's correct?
 
-#get the CWD for future reference:
-my $pwd = $ENV{PWD};
-
 #daemonize:
 Proc::Daemon::Init();
 
 #create PID file:
 open(my $out,">$pwd/talariad.pid");
-print $out $$;
+print $out "$$\n";
 close $out;
 
 #initialize the logger:
@@ -91,6 +91,7 @@ $SIG{INT}  = sub { &quit("SIGINT") };
 $SIG{QUIT} = sub { &quit("SIGQUIT") };
 $SIG{TERM} = sub { &quit("SIGTERM") };
 
+#the last time SentMessages was purged
 my $last_check = 0; #TODO: persist this across Talaria.pl invocations
  
 while (1) {
@@ -106,7 +107,7 @@ while (1) {
 
     #Once a day, purge all day old sent messages 
     if (time > ($last_check + (60 * 60 * 24))) {
-	eval {&purgeSentMessages(time - 60 * 60 * 24)};
+	eval {&deleteMessagesByTime('SentMessages',time - 60 * 60 * 24)};
 	if ($@) {
 	    $logger->error("Error purging sent messages: $@");
 	}
@@ -116,9 +117,6 @@ while (1) {
     #Wait:
     sleep $conf{interval};
 }
-
-##################################################
-#Subroutines:
 
 =item checkIncoming
     
@@ -167,10 +165,12 @@ sub checkIncoming {
 }
 
 =item checkOutgoing
-
+    
     Check the database for any messages whose return times are now in the past.
     Retrieve those messages and send them.
-
+  Arguments: None.
+  Returns: None.
+    
 =cut
 
 sub checkOutgoing {
@@ -178,10 +178,11 @@ sub checkOutgoing {
     $logger->debug('Checking outgoing...');
 
     #Check the database for messages to send:
-    my @messages_to_send = &getMessagesToSend(time);
+    my @messages = &getMessagesByTime('ParsedMessages',time);
+    &deleteMessagesByTime('ParsedMessages',time);
 
     #Send the messages:
-    &sendMessages(&decryptMessages($key,@messages_to_send));
+    &sendMessages(&decryptMessages($key,@messages));
 }
 
 =item sendMessages(messages)
@@ -206,9 +207,8 @@ sub sendMessages {
     &putMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
 }
 
-=item
+=item mailAdmin(text)
 
-    mailAdmin(text)
     Mail the administrator a message.
     The administrator's email is given in the config file.
 
@@ -222,8 +222,14 @@ sub mailAdmin {
 	uid => 'mailadmin', #else Mod::SendMail complains
 	);
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},\%message);
-    if (@$unsent_ref) {$logger->info("Error: failed to mail admin: $text");}
+    if (@$unsent_ref) {$logger->error("Error: failed to mail admin: $text");}
 }
+
+=item quit(signal)
+
+    Exit gracefully, disconnecting from the DB and emailing a notification to the admin.
+
+=cut
 
 sub quit {
     my $signal = shift;

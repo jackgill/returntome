@@ -13,50 +13,67 @@ use Mod::DB;
 use Mod::Conf;
 use Mod::Crypt;
 
+#TODO: set up logger
+
+#Get the list of table names:
 my @tables = keys %{ &getSchemas };
-#Set up the display page:
+
+#Make the webpage:
 print header, start_html('Return To Me');
 
-print h1("Return To Me");
-print br();
-print h4('"If you want a professional looking website, go hire a web designer." -- corporate motto');
-print br();
+#Make the banner:
+print h1("Return To Me"),
+    br(),
+    h4('"If you want a professional looking website, go hire a web designer." -- corporate motto'),
+    br();
+
+#Make the form:
 print start_form,
- "Table: ",
-popup_menu(-name=>'table', -values => [@tables,'All']),
-submit,
+    "Table: ",
+    popup_menu(-name=>'table', -values => [@tables,'All']),
+    br,
+    "Password: ",
+    password_field('key','',10,10),
+    br,
+    submit,
     end_form;
 
+#Handle form submission:
 if (param) {
+    my $key = param('key');
     if (param('table') eq 'All') {
 	for (@tables) {
-	    &displayTable($_);
+	    &displayTable($_,$key);
 	}
     } else {	    
-	&displayTable(param('table'));
+	&displayTable(param('table'),$key);
     }
 }
+
 print end_html();
+
 
 sub displayTable {
     my $table_name = shift;
-    my $key = 'GoBuff$123';
-#Connect to the database:
-#Read conf file:
-    my %conf = %{ &getCipherConf("../conf/cli.conf",$key) };
-#Check that conf variables are defined:
+    my $key = shift;
+
+    #Read conf file:
+    my $conf_file = "../conf/cli.conf";
+    my %conf = %{ &getCipherConf($conf_file,$key) };
+    die "Failed to decrypt $conf_file" unless %conf;
+    #Check that conf variables are defined:
     my @conf_vars = qw(db_server db_user db_pass);
     for (@conf_vars) {
 	unless (defined $conf{$_}) {
-	    die "Configuration error: conf/talaria.conf does not define $_\n";
+	    die "Configuration error: $conf_file does not define $_\n";
 	}
     }
     
-#Connect to DB:
+    #Connect to DB:
     &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
     my @table = @{ &getTable($table_name) };
 
-#set up the table:
+    #set up the table:
     print start_table({-border=>1});
     print caption("$table_name");
     my $col_names =shift @table;
@@ -81,8 +98,7 @@ sub displayTable {
     }
 	print "</tr>";
     }
-    
-#End the table:
+
     print end_table;
     &Mod::DB::disconnect;
 }
