@@ -13,7 +13,7 @@ use Carp;
 use Mod::Crypt;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &getSchemas &makeTables &clearTables &showTables &putMessages &getMessageByUID &deleteMessageByUID &getMessagesByTime &deleteMessagesByTime &getUID &getTable);
+our @EXPORT = qw(&connect &disconnect &getSchemas &dropTables &makeTables &putUnparsedMessages &putParsedMessages &getMessageByUID &deleteMessageByUID &getMessagesByTime &deleteMessagesByTime &getUID &getTable);
 
 =head1 NAME
 
@@ -24,9 +24,11 @@ our @EXPORT = qw(&connect &disconnect &getSchemas &makeTables &clearTables &show
 =head1 SYNOPSIS
 
     &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+
     &putMessages($table_name,@messages);
-    my @messages = &getMessages('UnparsedMessages','000000000','000000001');
-    my @messages_to_send = &getMessagesToSend(time);
+    my %message = &getMessageByUID('UnparsedMessages','000000000');
+    my @messages = &getMessagesByTime(time);
+
     &Mod::DB::disconnect;
 
 =cut
@@ -68,7 +70,7 @@ sub connect {
 =cut
 
 sub disconnect {
-    $sth->finish;
+    $sth->finish if $sth;
     $dbh->disconnect;
     $logger->debug("Disconnected from database.");
 }
@@ -94,23 +96,41 @@ sub sql {
 
 =cut
 
-my @message_tables = ('UnparsedMessages','ParsedMessages','SentMessages','UnsentMessages'); #EVIL violation of DRY
 sub getSchemas {
-    my $message_schema = "(uid INTEGER(9) ZEROFILL PRIMARY KEY, return_time INTEGER(10),mail LONGBLOB)";
+    #Parsed messages have a return time:
+    my $parsed_schema = "(uid INTEGER(9) ZEROFILL PRIMARY KEY, return_time INTEGER(10),mail LONGBLOB)";
+    #Unparsed messages do not:
+    my $unparsed_schema = "(uid INTEGER(9) ZEROFILL PRIMARY KEY, mail LONGBLOB)";
     my %schemas = (
-	'ParsedMessages' => $message_schema,
-	'UnparsedMessages' => $message_schema,
-	'SentMessages' => $message_schema,
-	'UnsentMessages' => $message_schema,
+	'ParsedMessages' => $parsed_schema,
+	'SentMessages' => $parsed_schema,
+	'UnsentMessages' => $parsed_schema,
+	'UnparsedMessages' => $unparsed_schema,
+	'RawMessages' => $unparsed_schema,
 	'UID' => "(uid INTEGER(9) ZEROFILL)",
 	);
     return \%schemas
 } 
 
 
-=item makeTables
+=item dropTables
 
-    Delete all existing tables and create new ones.
+    Delete all tables.
+    Arguments: None.
+    Returns: None.
+
+=cut
+
+sub dropTables {
+    my %schemas = %{ &getSchemas };
+    for my $table (keys %schemas) {
+	&sql("DROP TABLE $table"); 
+    }
+}
+
+=item makeTables 
+
+    Create all tables.
     Arguments: None.
     Returns: None.
 
@@ -119,88 +139,12 @@ sub getSchemas {
 sub makeTables {
     my %schemas = %{ &getSchemas };
     for my $table (keys %schemas) {
-	&sql("DROP TABLE $table"); #TODO add "if exists $table"
 	&sql("CREATE TABLE $table $schemas{$table}");
     }
     &sql("INSERT INTO UID VALUES ('000000000');");
 }
 
-=item clearTables
-
-    DEPRECATED as redundant with &makeTables.
-    Clear all tables.
-    Arguments: None.
-    Returns: None.
-
-=cut
-
-sub clearTables {
-    for (@message_tables) {
-	&sql("DELETE FROM $_");
-    }
-    &sql("UPDATE UID SET uid = 000000000;");
-}
-
-=item showTables(key)
-
-    DEPRECATED in favor of cgi/viewDB (&Mod::DB::getTable)
-    Print the contents of all the message tables to STDOUT. Calls &showTable.
-    Arguments: Encryption key
-    Returns: None.
-
-=cut
-
-sub showTables {
-    my $key = shift;
-    for (@message_tables) {
-	print "$_:\n";
-	&showTable($_,$key);
-    }
-}
-
-=item showTable(table name, encryption key)
-
-    DEPRECATED in favor of cgi/viewDB (&Mod::DB::getTable)
-    Print the contents of the specified table to STDOUT.
-    Arguments: Table name, encryption key.
-    Returns: None.
-
-=cut
-
-use Text::Wrap;
-sub showTable {
-    my $table = shift;
-    my $key = shift;
-
-    #Get the column names:
-    #Get a table with one column. Each row is the name of a column in $table
-    &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table'");  
-    my @col_refs = @{ $sth->fetchall_arrayref }; #this is an array of references to arrays
-    my @col_names; #this will hold the names of the columns
-    for my $col_ref (@col_refs) {
-	my @row = @$col_ref; #get the array which is a row in the schema table
-	my $col_name = $row[0]; #get the first (and only) column in the row
-	push @col_names, $col_name;
-    }
-
-    #Print the headers:
-    my $format = "%-9s | %-10s | %-60s\n";
-    printf $format,@col_names;
-    print "-" x 88,"\n";
-
-    #Now get the entire table:
-    &sql("SELECT * FROM $table");
-    my @row;
-    while (@row = $sth->fetchrow_array()) {
-	my $cipher_last = pop @row;
-	my $plain_last = &decrypt($key,$cipher_last);
-	$Text::Wrap::columns = 60;
-	my $wrapped_last =  wrap('', ' ' x 25, $plain_last);
-	printf $format,@row, $wrapped_last;
-    }
-}
-
-=item putMessages(table name, messages)
+=item putParsedMessages(table name, messages)
 
     Insert a list of messages into the specified table.
     Arguments: The first argument is the name of the table. All subsequent arguments should be message hashrefs.
@@ -208,21 +152,41 @@ sub showTable {
 
 =cut
 
-sub putMessages {
+sub putParsedMessages {
     my $table = shift;
     for (@_) {
+	#Get message and extract fields:
 	my %message = %$_;
 	my $uid = $message{'uid'};
 	my $return_time = $message{'return_time'};
 	$return_time = 0 unless $return_time;
 	my $mail = $message{'mail'};
+
+	#Insert message into table using parameterized query:
 	my $put_msg = $dbh->prepare("INSERT INTO $table VALUES (?,?,?);");
 	if($put_msg) {
-	$put_msg->execute($uid,$return_time,$mail) or $logger->error("Error executing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
+	    $put_msg->execute($uid,$return_time,$mail) or $logger->error("Error executing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
 	} else  {
 	    $logger->error("Error preparing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
 	}
+    }
+}
 
+sub putUnparsedMessages {
+    my $table = shift;
+    for (@_) {
+	#Get message and extract fields:
+	my %message = %$_;
+	my $uid = $message{'uid'};
+	my $mail = $message{'mail'};
+
+	#Insert message into table using parameterized query:
+	my $put_msg = $dbh->prepare("INSERT INTO $table VALUES (?,?);");
+	if($put_msg) {
+	    $put_msg->execute($uid,$mail) or $logger->error("Error executing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
+	} else  {
+	    $logger->error("Error preparing statement " . $put_msg->{Statement} . ": " . $put_msg->errstr);
+	}
     }
 }
 
@@ -239,8 +203,7 @@ sub getMessageByUID {
     my $uid = shift;
 
     &sql("SELECT * FROM $table_name WHERE UID = $uid;");
-    my @row = $sth->fetchrow_array();
-    my %message = &rowToMessage(@row);
+    my %message = %{ $sth->fetchrow_hashref };
     return %message;
 }
 
@@ -274,9 +237,9 @@ sub getMessagesByTime {
 
     &sql("SELECT * FROM $table_name WHERE return_time < $return_time;");
     
-    my @row;
-    while (@row = $sth->fetchrow_array()) {
-	my %message = &rowToMessage(@row);
+    my $hash_ref;
+    while ($hash_ref = $sth->fetchrow_hashref) {
+	my %message = %$hash_ref;
 	push @messages, \%message;
     }
 
@@ -295,24 +258,6 @@ sub deleteMessagesByTime {
     my $table_name = shift;
     my $delete_time = shift;
     &sql("DELETE FROM $table_name WHERE return_time < $delete_time;");    
-}
-
-=item rowToMessage(row)
-
-    Convert a row from a message table to a message hash.
-    Arguments: The row, as a list.
-    Returns: The message hash, as a list.
-
-=cut
-
-sub rowToMessage {
-    my @row = @_;
-    my %message = (
-	uid => $row[0],
-	return_time => $row[1],
-	mail => $row[2],
-	);
-    return %message;
 }
 
 =item getUID

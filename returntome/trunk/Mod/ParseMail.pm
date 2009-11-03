@@ -93,6 +93,7 @@ sub parseMail {
     #get the headers:
     my $head = $entity->head;
     my $subject = $head->get('Subject',0);
+    $subject = "\n" unless $subject;
     my $from = $head->get('From',0);
 
     #Either epoch seconds or undef:
@@ -237,9 +238,7 @@ sub parseText {
     if  ($instructions) { #instructions were found
 	$logger->debug("Instructions: $instructions");
 	$return_time = &parseInstructions($instructions);
-	if ($return_time) { #instructions parsing succeeded:
-	    $logger->debug("Return time: $return_time");	    
-	} else { #instructions parsing failed, add an error message:
+	unless ($return_time) { #instructions parsing failed, add an error message:
 	    $logger->debug("Could not understand instructions");
 	    unshift @lines, "Sorry, we could not understand these instructions.\n\n";
 	}

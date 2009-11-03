@@ -17,23 +17,14 @@ use Mod::GetMail;
 use Mod::SendMail;
 use Mod::Crypt;
 
-#get the CWD for future reference:
+#get the CWD before we daemonize:
 my $pwd = $ENV{PWD};
 
 #Only one instance at a time, please:
 die "Talariad is already running\n" if (-e "$pwd/talariad.pid");
 
-#Defaults for command line switches:
-my $test_mode = '';
-
-#Check command line arguments:
-&GetOptions(
-    '--test-mode' => \$test_mode,
-    );
-
 #Get encryption key:
-our $key = &getKey;
-#TODO: compare this with a SHA1 hash to make sure it's correct?
+our $key = &getCheckedKey("$pwd/conf/key.sha1_base64");
 
 #daemonize:
 Proc::Daemon::Init();
@@ -53,20 +44,10 @@ $logger->info("Talaria daemon started.");
 #Send STDERR to logger:
 tie(*STDERR, 'Mod::TieHandle');
 
-#Test mode:
-if ($test_mode) {
-    $logger->info("Test mode enabled.");
-    require Mod::Test;
-    Mod::Test->import(qw(getMail sendMail));
-} 
-
 #Read encrypted conf file:
 my $conf_file = "$pwd/conf/daemon.conf";
 my %conf = %{ &getCipherConf($conf_file, $key) };
-unless (%conf) {
-    $logger->info("Failed to decrypt $conf_file") ;
-    exit 0;
-}
+die "Failed to decrypt $conf_file" unless (%conf);
 
 #Check that conf variables are defined:
 my @conf_vars = qw(
@@ -77,9 +58,7 @@ interval
 admin_address
 );
 for (@conf_vars) {
-    unless (defined $conf{$_}) {
-	die "Configuration error: $conf_file does not define $_\n";
-    }
+    die "Configuration error: $conf_file does not define $_\n" unless (defined $conf{$_});
 }
 
 #Connect to DB:
@@ -125,43 +104,52 @@ while (1) {
 =cut
 
 sub checkIncoming {
-    $logger->debug('');
-    $logger->debug('Checking incoming...');
 
     #Check for new messages:
-    my @raw_messages = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
-    my @parsed_messages;
-    my @unparsed_messages;
-
+    my @mail = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
+ 
+    my @raw_messages; #messages exactly as we received them.
+    my @parsed_messages; #messages we parsed, and have a return time.
+    my @unparsed_messages; #messages we didn't parse, and have an error message.
+ 
     #Log the number of new messages:
-    my $nMessages = @raw_messages;
+    my $nMessages = @mail;
     if ($nMessages != 0) {
 	$logger->info("Retrieved $nMessages messages from IMAP server");
+    } else {
+	return;
     }
     
-    #Parse the messages:
-    for my $raw_message (@raw_messages) {
+    #Go through the mail:
+    for (@mail) {
+	#Build and store the raw message:
 	my $uid = &getUID;
-	my %message = %{ &parseMail($raw_message,$uid) }; 
+	my %raw_message = (
+	    uid => $uid,
+	    mail => $_,
+	    );
+	push @raw_messages, \%raw_message;
+	
+	#Try parsing the message:
+	my %message = %{ &parseMail($_,$uid) }; 
 	my $return_time = $message{'return_time'};
-	if ($return_time) {
+
+	if ($return_time) { #Parsing succeeded.
 	    $logger->info("Return date for message $uid: " . &fromEpoch($return_time));
 	    push @parsed_messages, \%message;
-	} else {
+	} else { #Parsing failed.
 	    $logger->info("Message $uid had no readable date.");
-	    $logger->debug('');
-	    $logger->debug("Raw Message $uid:");
-	    $logger->debug($raw_message);	    
 	    push @unparsed_messages, \%message;
 	}
     }
 
     #Store the parsed and unparsed messages in the appropriate tables:
-    &putMessages('ParsedMessages',&encryptMessages($key,@parsed_messages));
-    &putMessages('UnparsedMessages',&encryptMessages($key,@unparsed_messages));
+    &putUnparsedMessages('RawMessages',&encryptMessages($key,@raw_messages));
+    &putParsedMessages('ParsedMessages',&encryptMessages($key,@parsed_messages)) if (@parsed_messages);
+    &putUnparsedMessages('UnparsedMessages',&encryptMessages($key,@unparsed_messages)) if (@unparsed_messages);
 
     #If we couldn't parse the message, return it to sender:
-    &sendMessages(@unparsed_messages);
+    &sendMessages(@unparsed_messages) if (@unparsed_messages);
 }
 
 =item checkOutgoing
@@ -174,9 +162,6 @@ sub checkIncoming {
 =cut
 
 sub checkOutgoing {
-    $logger->debug('');
-    $logger->debug('Checking outgoing...');
-
     #Check the database for messages to send:
     my @messages = &getMessagesByTime('ParsedMessages',time);
     &deleteMessagesByTime('ParsedMessages',time);
@@ -203,8 +188,8 @@ sub sendMessages {
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
 
     #Store the sent and unsent messages:
-    &putMessages('SentMessages',&encryptMessages($key,@$sent_ref));
-    &putMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
+    &putParsedMessages('SentMessages',&encryptMessages($key,@$sent_ref));
+    &putParsedMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
 }
 
 =item mailAdmin(text)
@@ -219,10 +204,10 @@ sub mailAdmin {
     my $mail = "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n";
     my %message = (
 	mail => $mail,
-	uid => 'mailadmin', #else Mod::SendMail complains
+	uid => 'mailadmin', #Mod::SendMail will log this
 	);
     my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},\%message);
-    if (@$unsent_ref) {$logger->error("Error: failed to mail admin: $text");}
+    $logger->error("Error: failed to mail admin: $text") if (@$unsent_ref);
 }
 
 =item quit(signal)

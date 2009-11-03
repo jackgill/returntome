@@ -9,9 +9,10 @@ use Exporter;
 use Crypt::CBC;
 use Term::ReadKey;
 use Carp;
+use Digest::SHA qw(sha1_base64);
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(encrypt decrypt getKey encryptMessages decryptMessages);
+our @EXPORT = qw(encrypt decrypt getCheckedKey getKey encryptMessages decryptMessages);
 
 sub encrypt {
     my $key = shift;
@@ -29,6 +30,20 @@ sub decrypt {
     my $cipher = Crypt::CBC->new( -key => $key, -cipher => 'Rijndael');
     my $plain_text = $cipher->decrypt($encrypted);
     return $plain_text;
+}
+
+sub getCheckedKey {
+    my $file = shift;
+    open(my $in,"<$file") or croak "Couldn't open $file: $!\n";
+    my @lines = <$in>;
+    my $file_digest = $lines[0];
+    my $key = &getKey;
+    my $key_digest = &sha1_base64($key);
+    if ($file_digest eq $key_digest) {
+	return $key;
+    } else {
+	croak "Invalid encryption key.\n";
+    }
 }
 
 sub getKey {

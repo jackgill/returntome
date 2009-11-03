@@ -81,24 +81,26 @@ sub displayTable {
     for (@table) {
 	my @row_array = @$_;
 	print "<tr>";
-    my $i = 0;
-    for (@row_array) {
-	print "<td>";
 	
-	if ($i == 2 ) { #KLUDGE
-	    print '<div style="overflow:auto; height:200px;width:600px;">';
+	my $nColumns = @row_array;
+	my $i = 0;
+	for (@row_array) {
+	    print "<td>";
+	    
+	    if ($i == $nColumns - 1 && $table_name ne 'UID') { #KLUDGE: Assume last column is mail. Unless it's the UID table.
+		print '<div style="overflow:auto; height:200px;width:600px;">';
 	    $_ = &decrypt($key,$_);
-	    print pre($_);
-	    print "</div>";
-	} else {
-	    print;
+		print pre($_);
+		print "</div>";
+	    } else {
+		print;
+	    }
+	    print "</td>";
+	    $i++;
 	}
-    	print "</td>";
-	$i++;
-    }
 	print "</tr>";
     }
-
+    
     print end_table;
     &Mod::DB::disconnect;
 }

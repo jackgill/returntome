@@ -29,25 +29,18 @@ my %conf = %{ &getConf("conf/test.conf") };
 &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
 
 #Create mail:
-my $nMessages = 2; 
+my $nMessages = 4; 
 my $nMinutes = 2;
-my @mail = &createMail($nMessages,$nMinutes);
-
+&Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+my @messages = &createMessages($nMessages,$nMinutes);
+&Mod::DB::disconnect;
+#Load the requested return times into a hash keyed by subject:
 my %requested;
-my @messages;
-for (@mail) {
-    #Convert the mail to a message ready for sending:
-    push @messages, {
-	uid => 'dummy',
-	mail => $_,
-    };  
-
-    #Load the requested return time into a hash keyed by subject:
-    my $subject = &getHeader($_,'Subject');
-    my %parsed_message = % { &parseMail($_,'dummy') }; 
-    my $return_time = $parsed_message{'return_time'};
+for (@messages) {
+    my %message = %$_;
+    my $subject = &getHeader($message{mail},'Subject');
+    my $return_time = $message{return_time};
     $requested{$subject} = $return_time;
-
 }
 
 #Send messages:
@@ -55,7 +48,7 @@ for (@mail) {
 #So we send them one at a time.
 for (@messages) {
     &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},$_);
-    sleep 30;
+    sleep 15;
 }
 print "Sent mail at ",&now,"\n";
 
@@ -87,7 +80,7 @@ for (sort keys %requested) {
     if ($date_time) {
 	printf $format,$_,&fromEpoch($requested_time),&fromEpoch($date_time),abs($requested_time-$date_time);
     } else {
-	printf $format,$_,&fromEpoch($requested_time),'Not Received';
+	printf $format,$_,&fromEpoch($requested_time),'Not Received','';
     }
 }
 

@@ -29,11 +29,11 @@ my %conf = %{ &getConf("conf/test.conf") };
 #Run tests:
 #&testGetSchemas;
 #&testMakeTables;
-&testClearTables;
+#&testClearTables;
 #&testPutMessages('ParsedMessages');
 #&testGetMessageByUID;
 #&testDeleteMessageByUID;
-#&testGetMessagesByTime;
+&testGetMessagesByTime;
 #&testDeleteMessagesByTime;
 #&testGetUID;
 #&testGetTable('ParsedMessages');
@@ -69,7 +69,7 @@ sub testPutMessages {
 }
 
 sub testGetMessageByUID {
-    my %message = &getMessageByUID('ParsedMessages','000000000');
+    my %message = &getMessageByUID('SentMessages','000000000');
     print Dumper(%message);
 }
 
@@ -78,7 +78,7 @@ sub testDeleteMessageByUID {
 }
 
 sub testGetMessagesByTime {
-    my @messages = &getMessagesByTime('ParsedMessages',time);
+    my @messages = &getMessagesByTime('SentMessages',time);
     print Dumper(@messages);
 }
 

@@ -8,9 +8,10 @@ use warnings;
 use Mod::Crypt;
 
 #User input:
-die "Usage: $0 file\n" unless (@ARGV == 1);
+die "Usage: $0 (file to be decrypted) (file containing key digest)\n" unless (@ARGV == 2);
 my $file = $ARGV[0];
-my $key = &getKey;
+my $digest = $ARGV[1];
+my $key = &getCheckedKey($digest);
 
 #Decrypt the file:
 open(my $in, "<$file") or die "Couldn't open $file: $!\n";

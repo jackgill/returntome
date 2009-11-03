@@ -17,7 +17,7 @@ Log::Log4perl::init('conf/log4perl_cli.conf');
 tie(*STDERR, 'Mod::TieHandle');
 
 #Get encryption key:
-our $key = &getKey;
+my $key = &getCheckedKey('conf/key.sha1');
 
 #Read encrypted conf file:
 my $conf_file = "conf/cli.conf";
@@ -36,29 +36,9 @@ for (@conf_vars) {
 
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-#define commands:
-my %commands = (
-    showdb => sub {&showTables($key);},
-    makedb => \&makeTables,
-    cleardb => \&clearTables, 
-    );
 
-#CLI loop:
-while (1) {
-    print "Talaria>"; #display prompt
-    chomp(my $line = <STDIN>); #read prompt
-    if ($line eq 'exit'){ #this command must be outside the eval block so we can exit
-	&Mod::DB::disconnect;
-	exit 0;
-    }
-    elsif (!$line) {
-	#An empty command does nothing
-    }
-    elsif ($commands{$line}) {
-	eval { &{$commands{$line}} };
-	print "Error executing command: $@" if $@;
-    }
-    else {
-	print "Unrecognized command\n";
-    }
-}
+&dropTables;
+&makeTables;
+
+&Mod::DB::disconnect;
+
