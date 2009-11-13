@@ -7,5 +7,7 @@ use warnings;
 
 use Mod::Ad;
 
-my $ad = &getAd;
-print "$ad\n";
+my $html_ad = &getHTMLAd;
+print "$html_ad\n";
+my $plain_ad = &getPlainAd;
+print "$plain_ad\n";

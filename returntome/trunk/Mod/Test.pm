@@ -56,6 +56,7 @@ my $logger = Log::Log4perl->get_logger();
 sub createMessages {
     my $nMessages = shift;
     my $nMinutes = shift;
+    my $to = shift;
     my @messages;
     for (my $i = 0; $i < $nMessages; $i++) {
 	my $return_time = time + $nMessages * 15 + int(rand($nMinutes * 60));
@@ -67,7 +68,7 @@ sub createMessages {
 	}
 	my $msg = MIME::Lite->new(
 	    From    => 'return.to.me.receive@gmail.com',
-	    To      => 'return.to.me.test@gmail.com',
+	    To      => $to,
 	    Subject => "subject $i",
 	    Type    => 'multipart/alternative',
 	    );

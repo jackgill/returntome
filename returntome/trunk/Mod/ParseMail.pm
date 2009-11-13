@@ -9,86 +9,49 @@ use Log::Log4perl;
 use MIME::Parser;
 use File::Path;
 use Mod::Ad;
+use Switch;
+use bytes;
+use Carp;
+use File::Path;
 
 our @ISA = ("Exporter");
 our @EXPORT = qw(&getHeader &parseMail &parseInstructions &fromEpoch &now);
 
-=head1 NAME
-
-    Mod::ParseMail
-
-=cut
-
-=head1 SYNOPSIS
-
-    my %message = %{ &parseMail($raw_message,$uid) };
-
-=cut
-
-=head1 DESCRIPTION
-
-    Parses emails.
-
-=cut
-
-=head1 FUNCTIONS
-
-=over 
-
-=cut
 
 my $logger = Log::Log4perl->get_logger();
-
-=item getHeader(mail, header name) 
-
-    Extract the specified header from the given email.
-
-=cut
 
 use Email::Simple;
 
 sub getHeader {
     my $text = shift;
     my $header = shift;
+    croak "null argument!" unless ($text && $header);
     my $email = Email::Simple->new($text);
     return $email->header($header);
 }
 
-=item parseMail(raw message, uid)
-
-    Extract the return time from the email. 
-    Add error messages or ads as necessary.
-    Arguments: The email as a string, and a UID
-    Returns: A hashref to a message based on the email.
-    The message looks like:
-    my %message = (
-	mail => $mail,
-	uid => $uid,
-	return_time => $return_time,
-	);
-
-=cut
-
 sub parseMail {
-    my $raw_message = shift;
-    my $uid = shift;
+    my $raw_mail = shift;
+    my $outgoing = shift;
 
     #Create the parser:
     my $parser = new MIME::Parser;
 
     #Set up the temporary directory the parser will write to:
     my $tmp_dir = '/tmp/mimedump/';
+
     (-d $tmp_dir) or mkdir $tmp_dir,0755 or die "mkdir: $!"; #TODO: this directory should be permanent
+    rmtree( $tmp_dir, {keep_root => 1} );
     (-w $tmp_dir) or die "can't write to directory";
     $parser->output_dir($tmp_dir);
 
     #parse the mail:
-    my $entity = $parser->parse_data($raw_message);    
+    my $entity = $parser->parse_data($raw_mail);
 
     #Check the parser for errors:
     my $results  = $parser->results;
     my @msgs = $results->msgs;
-    $logger->info($_) for (@msgs);    
+    $logger->error("Parser Error: $_") for (@msgs);    
     
     #get the headers:
     my $head = $entity->head;
@@ -96,170 +59,115 @@ sub parseMail {
     $subject = "\n" unless $subject;
     my $from = $head->get('From',0);
 
-    #Either epoch seconds or undef:
-    my $return_time;
-
     #Initialize mail with basic headers:
-    my $mail = 
-	"From: return.to.me.test\@gmail.com\n" .
+    my $parsed_mail = 
+	"From: $outgoing\n" .
 	"To: $from" .
 	"Subject: R2M: $subject" ;    
 
-    #determine if this messages is MIME formatted:
+    #Find the text/plain and text/html parts of the message:
+    my $text_plain;
+    my $text_html;
+
     if ($head->count('MIME-Version')) {#Message is MIME formatted
 	#Add MIME headers to mail:
-	$mail .= 
+	$parsed_mail .= 
 	    "MIME-Version: " . $head->get('MIME-Version',0) .
 	    "Content-Type: " . $head->get('Content-Type',0);
 
-	my $effective_type = $entity->effective_type;
-	if ($effective_type eq 'multipart/mixed') { #we have attachments
-	    my @parts = $entity->parts;
-	    for my $part (@parts) {
-		#skip over attachments:
-		if (my $disp = $part->head->get('Content-Disposition')) {
-		    next if $disp =~ /attachment/;
+	switch($entity->effective_type) {
+	    case 'multipart/mixed' { #there are attachments
+	      PARTS:
+		for my $part ($entity->parts) {
+		    if ($part->effective_type eq 'multipart/alternative') {
+		      SUB_PARTS:
+			for my $sub_part ($part->parts) {
+			    $text_plain = $sub_part if ($sub_part->effective_type eq 'text/plain');
+			    $text_html  = $sub_part if ($sub_part->effective_type eq 'text/html');
+			}
+			last PARTS;
+		    }
+		    if ($part->effective_type eq 'text/plain') {
+			$text_plain = $part;
+			last PARTS;
+		    }
+		}	    
+	    } 
+	    case 'multipart/alternative' { #text/plain and text/html only
+		for my $part ($entity->parts) {
+		    $text_plain = $part if ($part->effective_type eq 'text/plain');
+		    $text_html  = $part if ($part->effective_type eq 'text/html');
 		}
-		if ($part->effective_type eq 'multipart/alternative') {
-		    $return_time = &parseMulti($part);
-		    last;
-		}
-		if ($part->effective_type eq 'text/plain') {
-		    $return_time = &parseText($part);
-		    last;
-		}
+	    }		
+	    case 'text/plain' { #text/plain only
+		$text_plain = $entity;
 	    }
-	} elsif ($effective_type eq 'multipart/alternative') { #text/plain and text/html only
-	    $return_time = &parseMulti($entity);
-	} elsif ($entity->effective_type eq 'text/plain') { #text/plain only
-	    $return_time = &parseText($entity);
 	}
-
     } else {#Message is not MIME formatted
-	$return_time = &parseText($entity);
+	$text_plain = $entity;
     }
-	
+
+    #Process text/plain and text/html parts:
+    my @plain_lines = &readEntity($text_plain);
+    my @html_lines = &readEntity($text_html) if $text_html;
+
+    my $error_message;
+    my $return_time;
+
+    #Look for instructions:
+    my $instructions;
+    for my $line (@plain_lines) {
+	if ($line =~ /^ \s* (?: r2m | rtm | return \s* to \s* me) :? \s* (.+) \s* $/ixms) {
+	    $instructions = $1;
+	    last;
+	}
+    }
+    
+    if  ($instructions) { #instructions were found
+	$return_time = &parseInstructions($instructions);
+	if ($return_time) {#instructions parsing succeeded 
+	    #Check for return dates in the past:
+	    $error_message = "You specified a return date in the past." if ($return_time < time);
+
+	    #Check for return dates too far in the future:
+	    $error_message = "Sorry, we do not accept messages with a return date more than a year in the future." if ($return_time > time + 60 * 60 * 24 * 365);
+	} else {#instructions parsing failed
+	    $error_message = "Sorry, we could not understand these instructions.";
+	}
+    } else {#instructions were not found, add an error message:
+        $error_message = "Sorry, we could not find instructions in this message.";
+    }
+    
+    #Check message size:
+    $error_message = "Sorry, your message size must be less than 8 MB." if (length($raw_mail) > 8e6);
+
+    #Add an error message or an ad to the message as appropriate:
+    if ($error_message) {
+	unshift @plain_lines, $error_message . "\n\n";
+	unshift @html_lines, "<b>" . $error_message . "</b><br><br>\n\n";
+    } else {
+	unshift @plain_lines, &getPlainAd . "\n\n";
+	unshift @html_lines, &getHTMLAd . ("-" x 70) . "<br><br>";
+    }
+
+    #Write the modified message:
+    &writeEntity($text_plain,\@plain_lines);
+    &writeEntity($text_html,\@html_lines) if $text_html;
+
     #Add the parsed MIME entity to the mail
-    $mail .= "\n" . join('',@{ $entity->body });
+    $parsed_mail .= "\n" . join('',@{ $entity->body });
 
     #assemble the message
     my %message = (
-	mail => $mail,
-	uid => $uid,
+	raw_mail => $raw_mail,
+	parsed_mail => $parsed_mail,
 	return_time => $return_time,
+	address => $from,
 	);
 
     return \%message;
 }
 
-=item parseMulti($entity)
-    
-    Parse a multipart/alternative MIME entity.
-    Arguments: a reference to the MIME entity.
-    Returns: either undef or the return time in epoch seconds.
-    Note that this function alters the MIME entity to include error messages or ads.
-
-=cut
-
-sub parseMulti {
-    my $entity = shift;
-    my @parts = $entity->parts;
-
-    #multipart/alternative contains text/plain and text/html:
-    my $plain_part;
-    my $html_part;
-
-    #strategy for parsing multipart/alternative messages:
-    #1) parse text/plain part
-    #2) any error messages in text/plain part are then copied to text/html part
-    #3) an ad is appened to text/html part
-
-    #Find the text/plain and text/html parts:
-    for my $part (@parts) {
-	if ($part->effective_type eq 'text/plain') {
-	    $plain_part = $part;
-	}
-	if ($part->effective_type eq 'text/html') {
-	    $html_part = $part;
-	}
-    }
-    
-    #Parse the text/plain part:
-    my $return_time = &parseText($plain_part);
-
-    #Modify the text/html part with error messages & ads:
-    my @html_lines = &readEntity($html_part);
-
-    unless ($return_time) {#If parsing failed, the first line of text/plain is an error message:
-	#Get error message:
-	my @plain_lines = &readEntity($plain_part);
-	my $error_message = $plain_lines[0];
-	chomp $error_message;
-	#Prepend it to html part:
-	unshift @html_lines, "<b>$error_message</b><br><br>\n";
-    } else {#If parsing succeeded, append an ad:
-	push @html_lines, '-' x 70 . '<br>',&getAd;
-    }
-
-    &writeEntity($html_part,\@html_lines);
-
-    return $return_time;
-}
-
-=item parseText($entity)
-
-    Parse a text/plain MIME entity for intructions.
-    Arguments: A reference to the MIME entity.
-    Returns: Either undef or the return time in epoch seconds.
-    Note that this subroutine modifies the MIME entity to include an error message if necessary.
-
-=cut
-
-sub parseText {
-    my $entity = shift;
-
-    #Read message:
-    my @lines = &readEntity($entity);
-
-    my $instructions; #e.g. R2M: tomorrow
-    my $return_time; #either undef or epoch seconds
-    
-    #look for instructions:
-    for (@lines) {
-	if (/^(\s*(R2M|RTM|RETURNTOME):?)/i) {
-	    my $flag = $1;
-	    $instructions = $_;
-	    chomp $instructions;# =~ s/\n//;
-	    $instructions =~ s/$flag//;
-	    last;
-	}
-    }
-
-    if  ($instructions) { #instructions were found
-	$logger->debug("Instructions: $instructions");
-	$return_time = &parseInstructions($instructions);
-	unless ($return_time) { #instructions parsing failed, add an error message:
-	    $logger->debug("Could not understand instructions");
-	    unshift @lines, "Sorry, we could not understand these instructions.\n\n";
-	}
-    } else {#instructions were not found, add an error message:
-	$logger->debug("Could not find instructions");
-	unshift @lines, "Sorry, we could not find instructions in this message.\n\n";
-    }
-    
-    #Add the possibly modified body to the MIME entity:
-    &writeEntity($entity,\@lines);
-
-    return $return_time;
-}
-
-=item readEntity(MIME entity)
-    
-    Get an array of lines representing the body of a MIME::Entity.
-    Arguments: A reference to a MIME::Entity.
-    Returns: A array of lines.
-
-=cut
 
 sub readEntity {
     my $entity = shift;
@@ -278,14 +186,6 @@ sub readEntity {
     } 
     return @lines;
 }
-
-=item writeEntity(entity, lines_ref)
-
-    Write an array of lines to the body of a MIME::Entity.
-    Arguments: A reference to a MIME::Entity, a reference to an array of lines.
-    Returns: 1 if write succeeded, 0 if write failed.
-
-=cut
 
 sub writeEntity {
     my $entity = shift;
@@ -306,13 +206,6 @@ sub writeEntity {
     return 1;
 }
 
-=item parseInstructions(instructions)
-
-    Extract a return time from the given instructions.
-    Arguments: A string containing the instructions.
-    Returns: Either a time in epoch seconds or undef.
-
-=cut
 
 use Date::Manip;
 
@@ -324,11 +217,6 @@ sub parseInstructions {
     return $secs;
 }
 
-=item fromEpoch(time)
-
-    Given a time in epoch seconds, return a formatted string representing that time. For safety, the call to DateTime is wrapped in an eval block.
-
-=cut
 
 use DateTime;
 
@@ -344,18 +232,95 @@ sub fromEpoch {
     }
 }
 
+
+sub now {
+    return &fromEpoch(time);
+}
+
+
+1;
+
+=head1 NAME
+
+    Mod::ParseMail
+
+=cut
+
+=head1 SYNOPSIS
+
+    my %message = %{ &parseMail($raw_message, $from) };
+
+=cut
+
+=head1 DESCRIPTION
+
+    Parses emails.
+
+=cut
+
+=head1 FUNCTIONS
+
+=over 
+
+=cut
+
+=item getHeader(mail, header name) 
+
+    Extract the specified header from the given email.
+
+=cut
+
+=item parseMail(raw message, uid)
+
+    Extract the return time from the email. 
+    Add error messages or ads as necessary.
+    Arguments: The email as a string, UID, 'From' address
+    Returns: A hashref to a message based on the email.
+    The message looks like:
+    my %message = (
+    mail => $mail,
+    return_time => $return_time,
+    address => $from,
+    );
+
+=cut
+
+=item readEntity(MIME entity)
+    
+    Get an array of lines representing the body of a MIME::Entity.
+    Arguments: A reference to a MIME::Entity.
+    Returns: A array of lines.
+
+=cut
+
+=item writeEntity(entity, lines_ref)
+
+    Write an array of lines to the body of a MIME::Entity.
+    Arguments: A reference to a MIME::Entity, a reference to an array of lines.
+    Returns: 1 if write succeeded, 0 if write failed.
+
+=cut
+
+=item parseInstructions(instructions)
+
+    Extract a return time from the given instructions.
+    Arguments: A string containing the instructions.
+    Returns: Either a time in epoch seconds or undef.
+
+=cut
+
+=item fromEpoch(time)
+
+    Given a time in epoch seconds, return a formatted string representing that time. For safety, the call to DateTime is wrapped in an eval block.
+
+=cut
+
 =item now
 
     Return a string containing the current time.
 
 =cut
 
-sub now {
-    return &fromEpoch(time);
-}
-
 =back
 
 =cut
-
-1;

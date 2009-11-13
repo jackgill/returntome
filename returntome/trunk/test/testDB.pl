@@ -33,10 +33,10 @@ my %conf = %{ &getConf("conf/test.conf") };
 #&testPutMessages('ParsedMessages');
 #&testGetMessageByUID;
 #&testDeleteMessageByUID;
-&testGetMessagesByTime;
+#&testGetMessagesByTime;
 #&testDeleteMessagesByTime;
 #&testGetUID;
-#&testGetTable('ParsedMessages');
+&testGetTable('ParsedMessages');
 #&testShowTables();
 
 #Disconnect from the DB:
@@ -64,8 +64,9 @@ sub testClearTables {
 sub testPutMessages {
     my $table_name = shift;
     my @messages = &createMessages(2,2);
-    my $key = &getKey;
-    &putMessages($table_name,&encryptMessages($key,@messages));
+    #my $key = &getKey;
+    #&putMessages($table_name,&encryptMessages($key,@messages));
+    &putParsedMessages($table_name,@messages);
 }
 
 sub testGetMessageByUID {

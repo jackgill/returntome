@@ -10,16 +10,21 @@ use Exporter;
 use LWP::Simple;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&getAd);
+our @EXPORT = qw(&getHTMLAd &getPlainAd);
 
-sub getAd {
+sub getHTMLAd {
 
-    my $url = "http://pcas.szabgab.com/ads/direct_link.js";
-    my $content = get($url);
-    if ($content =~ /write\("(.*)"\);/) {
-	return $1;
-    }
-    
+    my $ad = "Your html ad here.";
+    eval {
+	my $js = get("http://pcas.szabgab.com/ads/direct_link.js");
+	if ($js =~ /write\("(.*)"\);/) {
+	    $ad = $1;
+	} 
+    };
+    return $ad;
 }
 
+sub getPlainAd {
+    return "Your plain text ad here.";
+}
 1;

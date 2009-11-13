@@ -11,7 +11,8 @@ use Proc::Daemon;
 
 use Mod::ParseMail;
 use Mod::DB;
-use Mod::TieHandle;
+use Mod::TieSTDERR;
+use Mod::TieSTDOUT;
 use Mod::Conf;
 use Mod::GetMail;
 use Mod::SendMail;
@@ -37,12 +38,12 @@ close $out;
 #initialize the logger:
 Log::Log4perl::init_once("$pwd/conf/log4perl_daemon.conf");
 my $logger = Log::Log4perl->get_logger();
-
 $logger->info("PID: $$");
 $logger->info("Talaria daemon started.");
 
-#Send STDERR to logger:
-tie(*STDERR, 'Mod::TieHandle');
+#Send output streams to logger:
+tie(*STDERR, 'Mod::TieSTDERR');
+tie(*STDOUT, 'Mod::TieSTDOUT');
 
 #Read encrypted conf file:
 my $conf_file = "$pwd/conf/daemon.conf";
@@ -66,9 +67,12 @@ for (@conf_vars) {
 
 #Set up signal handlers:
 $SIG{HUP}  = sub { &quit("SIGHUP") };
-$SIG{INT}  = sub { &quit("SIGINT") };
 $SIG{QUIT} = sub { &quit("SIGQUIT") };
 $SIG{TERM} = sub { &quit("SIGTERM") };
+$SIG{INT}  = sub {     
+    $logger->info("Caught SIGINT.");
+    $logger->info('Talaria daemon exiting.');
+ };
 
 #the last time SentMessages was purged
 my $last_check = 0; #TODO: persist this across Talaria.pl invocations
@@ -106,40 +110,37 @@ while (1) {
 sub checkIncoming {
 
     #Check for new messages:
-    my @mail = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
+    my @mails = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
  
-    my @raw_messages; #messages exactly as we received them.
     my @parsed_messages; #messages we parsed, and have a return time.
-    my @unparsed_messages; #messages we didn't parse, and have an error message.
- 
-    #Log the number of new messages:
-    my $nMessages = @mail;
-    if ($nMessages != 0) {
+    
+    my $nMessages = @mails;
+    if ($nMessages != 0) {#If we have mail, log the number of new messages:
 	$logger->info("Retrieved $nMessages messages from IMAP server");
-    } else {
+    } else {#If we don't have mail, return:
 	return;
     }
     
     #Go through the mail:
-    for (@mail) {
-	#Build and store the raw message:
+    for my $mail (@mails) {
+	#Assign a UID:
 	my $uid = &getUID;
-	my %raw_message = (
-	    uid => $uid,
-	    mail => $_,
-	    );
-	push @raw_messages, \%raw_message;
 	
-	#Try parsing the message:
-	my %message = %{ &parseMail($_,$uid) }; 
-	my $return_time = $message{'return_time'};
+	#Parse the message:
+	my %message = %{ &parseMail($mail,$conf{smtp_user}) }; 
+	$message{uid} = $uid;
+	my $return_time = $message{return_time};
 
-	if ($return_time) { #Parsing succeeded.
-	    $logger->info("Return date for message $uid: " . &fromEpoch($return_time));
-	    push @parsed_messages, \%message;
-	} else { #Parsing failed.
-	    $logger->info("Message $uid had no readable date.");
-	    push @unparsed_messages, \%message;
+	    $logger->info("Message $uid is too big.");
+	    push @too_big_messages, \%message;
+	} else {
+	    if ($return_time) { #Parsing succeeded.
+		$logger->info("Return date for message $uid: " . &fromEpoch($return_time));
+		push @parsed_messages, \%message;
+	    } else { #Parsing failed.
+		$logger->info("Message $uid had no readable date.");
+		push @unparsed_messages, \%message;
+	    }
 	}
     }
 
@@ -150,6 +151,7 @@ sub checkIncoming {
 
     #If we couldn't parse the message, return it to sender:
     &sendMessages(@unparsed_messages) if (@unparsed_messages);
+    &sendMessages(@too_big_messages) if (@too_big_messages);
 }
 
 =item checkOutgoing

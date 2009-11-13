@@ -1,6 +1,6 @@
 #!/bin/bash
 
-tar -cf Talaria.tar bin/CLI.pl bin/talariad.pl bin/encrypt.pl bin/decrypt.pl Mod/* cgi/*
+tar -cf Talaria.tar bin/* Mod/* cgi/*
 sftp rtmadmin@rtmserver <<EOF
 cd deploy
 rm bin/*

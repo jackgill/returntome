@@ -13,7 +13,7 @@ use Carp;
 use Mod::Crypt;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &getSchemas &dropTables &makeTables &putUnparsedMessages &putParsedMessages &getMessageByUID &deleteMessageByUID &getMessagesByTime &deleteMessagesByTime &getUID &getTable);
+our @EXPORT = qw(&connect &disconnect &getSchemas &resetDB &putUnparsedMessages &putParsedMessages &getMessageByUID &deleteMessageByUID &getMessagesByTime &deleteMessagesByTime &getUID &getTable);
 
 =head1 NAME
 
@@ -59,8 +59,7 @@ my $logger = Log::Log4perl->get_logger();
 
 sub connect {
     my ($db, $user, $pass) = @_;
-    $dbh = DBI->connect("DBI:$db",$user,$pass) or $logger->error("DB: Couldn't connect to database: " . DBI->errstr); 
-    $logger->debug("Connected to database.");
+    $dbh = DBI->connect("DBI:$db",$user,$pass,{PrintError => 0}) or $logger->error("DB: Couldn't connect to database: " . DBI->errstr); 
 }
 
 =item disconnect
@@ -83,7 +82,6 @@ sub disconnect {
 
 sub sql {
     my $statement = shift;
-    $logger->debug($statement);
     $sth = $dbh->prepare($statement) or $logger->error("Error preparing statement " . $sth->{Statement} . ": " . $sth->errstr);
     $sth->execute() or $logger->error("Error executing statement " . $sth->{Statement} . ": " . $sth->errstr);
 }
@@ -112,33 +110,18 @@ sub getSchemas {
     return \%schemas
 } 
 
+=item resetDB
 
-=item dropTables
-
-    Delete all tables.
+    Drop all tables, then create all tables.
     Arguments: None.
     Returns: None.
 
 =cut
 
-sub dropTables {
+sub resetDB {
     my %schemas = %{ &getSchemas };
     for my $table (keys %schemas) {
-	&sql("DROP TABLE $table"); 
-    }
-}
-
-=item makeTables 
-
-    Create all tables.
-    Arguments: None.
-    Returns: None.
-
-=cut
-
-sub makeTables {
-    my %schemas = %{ &getSchemas };
-    for my $table (keys %schemas) {
+	&sql("DROP TABLE IF EXISTS $table"); 
 	&sql("CREATE TABLE $table $schemas{$table}");
     }
     &sql("INSERT INTO UID VALUES ('000000000');");
@@ -285,26 +268,21 @@ sub getUID {
 
 sub getTable {
     my $table_name = shift;
-    my @table;
-    
+
+    #Get the entire table:
+    &sql("SELECT * FROM $table_name");
+    my @table = @{ $sth->fetchall_arrayref }; #this is an array of array refs
+ 
+    #Get the column names:
     #this returns a table with one column. Each row is the name of a column in $table_name
     &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table_name'");  
-    my @col_refs = @{ $sth->fetchall_arrayref }; #this is an array of references to arrays
-    my @col_names; #this will hold the names of the columns
-    for my $col_ref (@col_refs) {
-	my @row = @$col_ref; #get the array which is a row in the schema table
-	my $col_name = $row[0]; #get the first (and only) column in the row
-	push @col_names, $col_name;
-    }
-    push @table, \@col_names;
+    my @rows = @{ $sth->fetchall_arrayref }; #this is an array of array refs
+    my @col_names; 
+    push @col_names, $_->[0] for @rows; #Get the first column of the row
 
-    #Now get the entire table:
-    &sql("SELECT * FROM $table_name");
-    my @row;
-    while (@row = $sth->fetchrow_array()) {
-	my @this_row = @row;
-	push @table, \@this_row;
-    }
+    #Add the column names to the table:
+    unshift @table, \@col_names;
+
     return \@table;
 }
 

@@ -30,7 +30,7 @@ sub getMail {
     my $imap = Net::IMAP::Simple::SSL->new($server);
     
     unless($imap) {
-	$logger->error("Could not create Net::IMAP::Simple::SSL object.");
+	$logger->error("Could not connect to IMAP server.");
 	return ();
     }
     

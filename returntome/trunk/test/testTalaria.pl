@@ -32,7 +32,7 @@ my %conf = %{ &getConf("conf/test.conf") };
 my $nMessages = 4; 
 my $nMinutes = 2;
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-my @messages = &createMessages($nMessages,$nMinutes);
+my @messages = &createMessages($nMessages,$nMinutes,'return.to.me.beta@gmail.com');
 &Mod::DB::disconnect;
 #Load the requested return times into a hash keyed by subject:
 my %requested;

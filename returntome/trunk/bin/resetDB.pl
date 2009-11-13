@@ -17,7 +17,7 @@ Log::Log4perl::init('conf/log4perl_cli.conf');
 tie(*STDERR, 'Mod::TieHandle');
 
 #Get encryption key:
-my $key = &getCheckedKey('conf/key.sha1');
+my $key = &getCheckedKey('conf/key.sha1_base64');
 
 #Read encrypted conf file:
 my $conf_file = "conf/cli.conf";
@@ -37,8 +37,7 @@ for (@conf_vars) {
 #Connect to DB:
 &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
 
-&dropTables;
-&makeTables;
+&resetDB;
 
 &Mod::DB::disconnect;
 
