@@ -8,11 +8,12 @@ use warnings;
 use Mod::SendMail;
 use Mod::GetMail;
 use Mod::ParseMail;
-use Mod::TieHandle;
 use Mod::Conf;
 use Mod::Test;
 
 use Data::Dumper::Simple;
+use Date::Manip;
+
 #TestTalaria.pl
 #Send a set of test messages to the Talaria program
 #Wait for their return
@@ -20,47 +21,45 @@ use Data::Dumper::Simple;
 
 #Set up logging:
 Log::Log4perl::init('conf/log4perl_test.conf');
-tie(*STDERR, 'Mod::TieHandle');
 
 #Read the config file:
 my %conf = %{ &getConf("conf/test.conf") };
 
 #Clear inbox:
-&getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
+&getMail(@conf{'imap_server', 'imap_user', 'imap_pass'})
 
 #Create mail:
-my $nMessages = 4; 
-my $nMinutes = 2;
-&Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-my @messages = &createMessages($nMessages,$nMinutes,'return.to.me.beta@gmail.com');
-&Mod::DB::disconnect;
+my $nMessages = 10; 
+my $nMinutes = 20;
+my @messages = &createMessages($nMessages,$nMinutes,'return.to.me.test@gmail.com');
+
 #Load the requested return times into a hash keyed by subject:
 my %requested;
-for (@messages) {
-    my %message = %$_;
-    my $subject = &getHeader($message{mail},'Subject');
-    my $return_time = $message{return_time};
+for my $message (@messages) {
+    my $subject = &getHeader($message->{mail},'Subject');
+    my $return_time = $message->{return_time};
     $requested{$subject} = $return_time;
 }
 
 #Send messages:
 #Sending more than 2 messages at a time seems to trip gmail's spam filter,
-#So we send them one at a time.
-for (@messages) {
-    &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},$_);
+#so we send them one at a time.
+for my $message (@messages) {
+    &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},$message)
     sleep 15;
 }
+
 print "Sent mail at ",&now,"\n";
 
 #Wait:
 sleep(($nMinutes + 2) * 60);
 
 #Check mail:
-my @raw_messages = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
+my @raw_messages = &getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
 
 print "Checked mail at ",&now,"\n";
 
-#Print the headers for the reports:
+#Print the headers the results:
 my $format =  "%-20s %-20s %-20s %-20s\n";
 printf $format,'Subject','Requested','Sent','Error (sec)';
 print "-"x80,"\n";
@@ -68,19 +67,25 @@ print "-"x80,"\n";
 #Load the Date header of each received message into a hash keyed by Subject header
 my %date;
 for my $raw_message (@raw_messages) {
-    my $subject = &getHeader($raw_message,'Subject');
-    $subject =~ s/R2M: //;
-    $date{$subject} = &parseInstructions( &getHeader($raw_message,'Date') );
+    my $subject = &getHeader($raw_message,'Subject');   
+    my $date = &getHeader($raw_message,'Date');
+    $date{$subject} =  UnixDate(ParseDate($date),"%Y-%m-%d %T");
 }
 
 #For each message received, print the time requested and the time sent:
-for (sort keys %requested) {
-    my $requested_time = $requested{$_};
-    my $date_time = $date{$_};
-    if ($date_time) {
-	printf $format,$_,&fromEpoch($requested_time),&fromEpoch($date_time),abs($requested_time-$date_time);
+for my $subject (sort keys %requested) {
+    #Get the time this message was requested, and the time it was actually sent
+    my $requested_time = $requested{$subject}; 
+    my $sent_time = $date{$subject}; 
+ 
+    #To get the error, convert each date string to epoch seconds:
+    my $error = UnixDate(ParseDate($sent_time), "%s") - UnixDate(ParseDate($requested_time), "%s");
+
+    #Print the results:
+    if ($sent_time) {
+	printf $format,$subject,$requested_time,$sent_time,$error;
     } else {
-	printf $format,$_,&fromEpoch($requested_time),'Not Received','';
+	printf $format,$subject,$requested_time,'Not Received','';
     }
 }
 

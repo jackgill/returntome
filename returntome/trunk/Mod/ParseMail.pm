@@ -63,7 +63,7 @@ sub parseMail {
     my $parsed_mail = 
 	"From: $outgoing\n" .
 	"To: $from" .
-	"Subject: R2M: $subject" ;    #TODO: What if subject is encoded? MIME::Head->decode('I_KNOW_WHAT_I_AM_DOING')
+	"Subject: $subject" ;    #TODO: What if subject is encoded? MIME::Head->decode('I_KNOW_WHAT_I_AM_DOING')
 
     #Find the text/plain and text/html parts of the message:
     my $text_plain;
@@ -125,13 +125,14 @@ sub parseMail {
     }
     
     if  ($instructions) { #instructions were found
-	$return_time = &parseInstructions($instructions);
+	my ($date, $epoch) = &parseInstructions($instructions);
+	$return_time = $date;
 	if ($return_time) {#instructions parsing succeeded 
 	    #Check for return dates in the past:
-	    $error_message = "You specified a return date in the past." if ($return_time < time);
+	    $error_message = "You specified a return date in the past." if ($epoch < time);
 
 	    #Check for return dates too far in the future:
-	    $error_message = "Sorry, we do not accept messages with a return date more than a year in the future." if ($return_time > time + 60 * 60 * 24 * 365);
+	    $error_message = "Sorry, we do not accept messages with a return date more than a year in the future." if ($epoch > time + 60 * 60 * 24 * 365);
 	} else {#instructions parsing failed
 	    $error_message = "Sorry, we could not understand these instructions.";
 	}
@@ -158,10 +159,11 @@ sub parseMail {
     #Add the parsed MIME entity to the mail
     $parsed_mail .= "\n" . join('',@{ $entity->body });
 
+    chomp $from;
+
     #assemble the message
     my %message = (
-	raw_mail => $raw_mail,
-	parsed_mail => $parsed_mail,
+	mail => $parsed_mail,
 	return_time => $return_time,
 	address => $from,
 	);
@@ -215,7 +217,8 @@ sub parseInstructions {
     my $result = ParseDate($instructions);    
     return unless $result;
     my $date = UnixDate($result,"%Y-%m-%d %T");
-    return $date;
+    my $epoch = UnixDate($result,"%s");
+    return $date, $epoch;
 }
 
 

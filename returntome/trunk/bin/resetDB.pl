@@ -5,39 +5,64 @@ use 5.010;
 use strict;
 use warnings;
 
-use Log::Log4perl;
+use DBI;
 
-use Mod::DB;
-use Mod::TieHandle;
 use Mod::Conf;
 use Mod::Crypt;
 
-#initialize the logger:
-Log::Log4perl::init('conf/log4perl_cli.conf');
-tie(*STDERR, 'Mod::TieHandle');
+#Conf variables:
+my $key_digest = 'conf/key.sha1_base64';
+my $conf_file = "conf/daemon.conf";
 
 #Get encryption key:
-my $key = &getCheckedKey('conf/key.sha1_base64');
+my $key = &getCheckedKey($key_digest);
 
 #Read encrypted conf file:
-my $conf_file = "conf/cli.conf";
-my %conf = %{ &getCipherConf($conf_file, $key) };
-die "Failed to decrypt $conf_file\n" unless %conf;
-
-#Check that conf variables are defined:
-my @conf_vars = qw(
-db_server db_user db_pass 
-);
-for (@conf_vars) {
-    unless (defined $conf{$_}) {
-	die "Configuration error: $conf_file does not define $_\n";
-    }
-}
+my %conf = %{ &getConf($conf_file, $key) };
 
 #Connect to DB:
-&Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+my $dbh = DBI->connect("DBI:mysql:database=$conf{db_server}",$conf{db_user},$conf{db_pass},{PrintError => 0, RaiseError => 1});
 
-&resetDB;
+#Define schemas:
+my %schemas = (
+    Messages => 
+    "(" .
+    "uid INTEGER(9) ZEROFILL NOT NULL AUTO_INCREMENT" . 
+    ", " .
+    "address VARCHAR(320) NULL" . 
+    ", " .
+    "received_time DATETIME" . 
+    ", " .
+    "return_time DATETIME" . 
+    ", " .
+    "sent_time DATETIME" . 
+    ", " .	
+    "PRIMARY KEY (uid)" .
+    ")", 
+    RawMail => 
+    "(" .
+    "uid INTEGER(9) ZEROFILL NOT NULL" 
+    . ", " .
+    "mail MEDIUMBLOB NOT NULL" . 
+    ", " .
+    "PRIMARY KEY (uid)" .
+    ")",
+    ParsedMail => 
+    "(" .
+    "uid INTEGER(9) ZEROFILL NOT NULL" . 
+    ", " .
+    "mail MEDIUMBLOB NOT NULL" . 
+    ", " .
+    "PRIMARY KEY (uid)" .
+    ")",
+    );
 
-&Mod::DB::disconnect;
+#Drop and re-create each table.
+for my $table (keys %schemas) {
+    $dbh->do("DROP TABLE IF EXISTS $table"); 
+    $dbh->do("CREATE TABLE $table $schemas{$table}");
 
+}
+
+#Disconnect from DB:
+$dbh->disconnect;

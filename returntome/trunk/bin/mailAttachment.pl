@@ -25,7 +25,7 @@ my $date = $dt->hms . " " . $dt->mdy;
 my $msg = MIME::Lite->new(
     From    => $from,
     To      => $to,
-    Subject => "R2M Backup $date",
+    Subject => "R2M Snapshot $date",
     Type    => 'multipart/mixed',
     );
 $msg->attach(

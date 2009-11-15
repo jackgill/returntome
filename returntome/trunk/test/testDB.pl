@@ -33,9 +33,9 @@ my %conf = %{ &getConf("conf/test.conf") };
 #&testStoreMail;
 #&testRetrieveMail;
 #&testDeleteRow;
-&populateDB;
+#&populateDB;
 #&testGetMessagesToReturn;
-&testMarkAsSent;
+#&testMarkAsSent;
 
 #Disconnect from the DB:
 &Mod::DB::disconnect;

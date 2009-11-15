@@ -76,11 +76,17 @@ sub sendMail {
     }
 
     #Send the messages
-    for (@messages) {
-	my %message = %$_;
+    for my $message (@messages) {
 
-	my $address = $message{address};
-	my $mail = $message{mail};
+	my $address = $message->{address};
+	my $mail = $message->{mail};
+	my $uid = $message->{uid};
+	$uid = "(NO UID)" unless $uid;
+
+	unless ($address) {
+	    $logger->error("Address is null for message $uid.");
+	    next;
+	}
 
 	#TODO: check return value on these?
 	$smtp->mail($sending_address . "\n");
@@ -92,10 +98,12 @@ sub sendMail {
 	#Check the SMTP response:
 	my $smtp_response = $smtp->message;
 	if ($smtp_response =~ /2.0.0 OK/) {
-	    push @sent_messages, \%message;
+	    $logger->info("Sent message $uid.");
+	    push @sent_messages, $message;
 	} else {
+	    $logger->error("Did not send message $uid.");
 	    $logger->error($smtp_response);
-	    push @unsent_messages, \%message;
+	    push @unsent_messages, $message;
 	}
     }
     $smtp->quit;

@@ -7,12 +7,10 @@ use strict;
 
 use Exporter;
 
-use Mod::DB;
-
-use IO::Scalar;
-use Time::Piece;
+#use IO::Scalar;
+#use Time::Piece;
 use MIME::Lite;
-use Data::Dumper::Simple;
+#use Data::Dumper::Simple;
 use DateTime;
 
 our @ISA = qw(Exporter);
@@ -50,14 +48,12 @@ sub createMessages {
 	my %message = (
 	    mail => $msg->as_string,
 	    return_time => $dt->ymd . " " . $dt->hms,
+	    address => 'return.to.me.test@gmail.com',
 	    );
 	push @messages, \%message;
     }
     return @messages;
 }
-
-
-
 
 1;
 	
