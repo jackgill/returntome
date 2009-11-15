@@ -212,10 +212,10 @@ use Date::Manip;
 
 sub parseInstructions {
     my $instructions = shift;
-    my $date = ParseDate($instructions);    
-    return unless $date;
-    my $secs = UnixDate($date,"%s");
-    return $secs;
+    my $result = ParseDate($instructions);    
+    return unless $result;
+    my $date = UnixDate($result,"%Y-%m-%d %T");
+    return $date;
 }
 
 

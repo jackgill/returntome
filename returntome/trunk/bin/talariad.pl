@@ -8,9 +8,10 @@ use warnings;
 use Log::Log4perl;
 use Getopt::Long;
 use Proc::Daemon;
+use DBI;
 
 use Mod::ParseMail;
-use Mod::DB;
+#use Mod::DB;
 use Mod::TieSTDERR;
 use Mod::TieSTDOUT;
 use Mod::Conf;
@@ -62,16 +63,22 @@ for (@conf_vars) {
     die "Configuration error: $conf_file does not define $_\n" unless (defined $conf{$_});
 }
 
+
+my $dbh; #DBI database handle
+
 #Connect to DB:
-&Mod::DB::connect("mysql:database=" . $conf{db_server, db_user, db_pass});
+#&Mod::DB::connect("mysql:database=" . $conf{db_server, db_user, db_pass});
+$dbh = DBI->connect("DBI:mysql:database=$conf{db_server}",$conf{db_user},$conf{db_pass},{PrintError => 0, RaiseError => 1});
 
 #Set up signal handlers:
 $SIG{HUP}  = sub { &quit("SIGHUP") };
 $SIG{QUIT} = sub { &quit("SIGQUIT") };
 $SIG{TERM} = sub { &quit("SIGTERM") };
 $SIG{INT}  = sub {     
+    $dbh->disconnect;
     $logger->info("Caught SIGINT.");
     $logger->info('Talaria daemon exiting.');
+    unlink("$pwd/talariad.pid");
  };
 
 #the last time SentMessages was purged
@@ -90,10 +97,10 @@ while (1) {
 
     #Once a day, purge all day old sent messages 
     if (time > ($last_check + (60 * 60 * 24))) {
-	eval {&deleteMessagesByTime('SentMessages',time - 60 * 60 * 24)};
-	if ($@) {
-	    $logger->error("Error purging sent messages: $@");
-	}
+	#eval {&deleteMessagesByTime('SentMessages',time - 60 * 60 * 24)};
+	#if ($@) {
+	#    $logger->error("Error purging sent messages: $@");
+	#}
 	$last_check = time;
     }
 
@@ -101,16 +108,10 @@ while (1) {
     sleep $conf{interval};
 }
 
-=item checkIncoming
-    
-    Check the IMAP server for new messages, parse them, store them in the database.
-
-=cut
-
 sub checkIncoming {
 
     #Check for new messages:
-    my @mail = &getMail($conf{imap_server, imap_user, imap_pass});
+    my @mail = &getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
  
     my @return_messages; #messages we are going to return immediately
     
@@ -120,26 +121,38 @@ sub checkIncoming {
     } else {#If we don't have mail, return:
 	return;
     }
-    
+
+    #Prepare SQL statements:
+    my $create_entry = $dbh->prepare("INSERT INTO Messages VALUES (NULL, ?, NOW(), ?, NULL)");
+    my $store_mail = $dbh->prepare("INSERT INTO ? VALUES (?, AES_ENCRYPT(?,?))");
+
     #Go through the mail:
     for my $raw_mail (@mail) {
 	
 	#Attempt to MIME parse the message:
 	my $message; #hashref
-	eval { $message = &parseMail($mail, $conf{smtp_user}) }; 
+	eval { $message = &parseMail($raw_mail, $conf{smtp_user}) }; 
 
 	if ($@) { #MIME parsing failed
 	    $logger->error("Error MIME parsing message: $@");
-	    my $uid = &createEntry(undef,time,undef);
-	    &storeMail('RawMail',$uid, $raw_mail, $key);
+	    $create_entry->execute(undef, undef);
+	    my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
+	    $store_mail->execute('RawMail',$uid, $raw_mail, $key);
 	} else { #MIME parsing succeeded
+	    #Unpack message:
 	    my $return_time = $message->{return_time};
 	    my $address = $message->{address};
 	    my $parsed_mail = $message->{mail};
-	    my $uid = &createEntry($address, time, $return_time);
-	    &storeMail('RawMail',$uid, $raw_mail, $key);
-	    &storeMail('ParsedMail',$uid, $parsed_mail, $key);
 
+	    #Create an entry for this message:
+	    $create_entry->execute($address, $return_time);
+	    my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
+
+	    #Store this message:
+	    $store_mail->execute('RawMail',$uid, $raw_mail, $key);
+	    $store_mail->execute('ParsedMail',$uid, $parsed_mail, $key);
+
+	    #Return unparsable messages to sender:
 	    if ($return_time) { #Parsing succeeded.
 		$logger->info("Return date for message $uid: " . $return_time);
 	    } else { #Parsing failed.
@@ -153,6 +166,58 @@ sub checkIncoming {
     &sendMessages(@return_messages) if (@return_messages);
 }
 
+sub checkOutgoing {
+    #Check the database for messages to send:
+    my @messagess = $dbh->selectall_arrayref("SELECT Messages.uid, AES_DECRYPT(ParsedMail.mail, '$key') AS mail FROM Messages INNER JOIN ParsedMail WHERE Messages.uid = ParsedMail.uid AND Messages.return_time < NOW()", { Slice => {} });
+
+    #Send the messages:
+    my ($sent_ref,$unsent_ref) = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},@messages);
+
+    #Mark the messages as sent
+    for my $message (@$sent_ref) {
+	$dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+    }
+
+    #Log any errors:
+    for my $message (@$unsent_ref) {
+	$logger->error("Failed to send message " . $message->{uid});
+    }
+}
+
+
+sub mailAdmin {
+    my $text = shift;
+    my $mail = "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n";
+    my %message = (
+	mail => $mail,
+	address => $conf{admin_address},
+	);
+    my ($sent_ref,$unsent_ref) = &sendMail((@conf{'smtp_server', 'smtp_user', 'smtp_pass'},\%message);
+    $logger->error("Error: failed to mail admin: $text") if (@$unsent_ref);
+}
+
+
+sub quit {
+    my $signal = shift;
+    $logger->info("Caught $signal.");
+    $logger->info('Talaria daemon exiting.');
+    #&Mod::DB::disconnect;
+    $dbh->disconnect;
+    &mailAdmin("talariad went down at " . &now . " due to $signal.");
+    unlink("$pwd/talariad.pid");
+    exit 0;
+}
+
+=over
+
+=cut
+
+=item checkIncoming
+    
+    Check the IMAP server for new messages, parse them, store them in the database.
+
+=cut
+
 =item checkOutgoing
     
     Check the database for any messages whose return times are now in the past.
@@ -162,24 +227,6 @@ sub checkIncoming {
     
 =cut
 
-sub checkOutgoing {
-    #Check the database for messages to send:
-    my @messages = &getMessagesToReturn(time, $key);
-
-    #Send the messages:
-    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server, smtp_user, smtp_pass},@messages);
-
-    #Mark the messages as sent
-    for my $message (@$sent_ref) {
-	&markAsSent($message->{uid});
-    }
-
-    #Log any errors:
-    for my $message (@$unsent_ref) {
-	$logger->error("Failed to send message " . $message->{uid});
-    }
-}
-
 =item mailAdmin(text)
 
     Mail the administrator a message.
@@ -187,32 +234,11 @@ sub checkOutgoing {
 
 =cut
 
-sub mailAdmin {
-    my $text = shift;
-    my $mail = "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n";
-    my %message = (
-	mail => $mail,
-	address => $conf{admin_address},
-	);
-    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server, smtp_user, smtp_pass},\%message);
-    $logger->error("Error: failed to mail admin: $text") if (@$unsent_ref);
-}
-
 =item quit(signal)
 
     Exit gracefully, disconnecting from the DB and emailing a notification to the admin.
 
 =cut
-
-sub quit {
-    my $signal = shift;
-    $logger->info("Caught $signal.");
-    $logger->info('Talaria daemon exiting.');
-    &Mod::DB::disconnect;
-    &mailAdmin("talariad went down at " . &now . " due to $signal.");
-    unlink("$pwd/talariad.pid");
-    exit 0;
-}
 
 =back
 

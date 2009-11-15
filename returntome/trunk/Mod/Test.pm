@@ -18,40 +18,7 @@ use DateTime;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(&createMessages);
 
-=head1 NAME
-
-    Mod::Test
-
-=cut
-
-=head1 SYNOPSIS
-
-    my @messages = &createMessages($nMessages,$nMinutes);
-
-=cut
-
-=head1 DESCRIPTION
-
-    A collection of routines used for testing.
-
-=cut
-
-=head1 FUNCTIONS
-
-=over 
-
-=cut
-
 my $logger = Log::Log4perl->get_logger();
-
-=item createMessages(nMessages, nMinutes)
-
-    Generate new messages. 
-
-    Arguments: the number of messages to be generated, and the number of minutes into the future for which the return times will be generated. The last two messages will have no instructions.
-    Returns: A list of message hash refs.
-
-=cut
 
 sub createMessages {
     my $nMessages = shift;
@@ -82,17 +49,52 @@ sub createMessages {
 	    );
 	my %message = (
 	    mail => $msg->as_string,
-	    return_time => $return_time,
-	    uid => &getUID,
+	    return_time => $dt->ymd . " " . $dt->hms,
 	    );
 	push @messages, \%message;
     }
     return @messages;
 }
 
-=back
 
-=cut
+
 
 1;
 	
+=head1 NAME
+
+    Mod::Test
+
+=cut
+
+=head1 SYNOPSIS
+
+    my @messages = &createMessages($nMessages,$nMinutes);
+
+=cut
+
+=head1 DESCRIPTION
+
+    A collection of routines used for testing.
+
+=cut
+
+=head1 FUNCTIONS
+
+=over 
+
+=cut
+
+=item createMessages(nMessages, nMinutes)
+
+    Generate new messages. 
+
+    Arguments: the number of messages to be generated, and the number of minutes into the future for which the return times will be generated. The last two messages will have no instructions.
+    Returns: A list of message hash refs.
+
+=cut
+
+
+=back
+
+=cut

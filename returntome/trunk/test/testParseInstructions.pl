@@ -29,10 +29,7 @@ printf $format, "-" x 19,"-" x 19;
 
 #Test instructions:
 for (@instructions) {
-    my $epoch = &parseInstructions($_);
-    my $result = "error";
-    if ($epoch) {
-	$result = &fromEpoch($epoch);    
-    } 
+    my $result = &parseInstructions($_);
+    $result = "error" unless $result;
     printf $format,$_,$result;
 }

@@ -13,7 +13,7 @@ use Carp;
 use Mod::Crypt;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&connect &disconnect &getSchemas &resetDB &createEntry &storeMail &retrieveMail &getTable);
+our @EXPORT = qw(&connect &disconnect &getSchemas &resetDB &createEntry &storeMail &retrieveMail &deleteRow &getMessagesToReturn &markAsSent);
 
 my $dbh; #DBI database handle
 my $logger = Log::Log4perl->get_logger();
@@ -75,8 +75,7 @@ sub createEntry {
     my ($address, $return_time) = @_;
 
     #Create new entry in Messages table using parameterized query:
-    my $uid;
-    $dbh->do("INSERT INTO Messages VALUES (NULL, '$address', NOW(), '$return_time', NULL)");
+    $dbh->do("INSERT INTO Messages VALUES (NULL, ?, NOW(), ?, NULL)",undef, $address, $return_time);
     my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
 
     return $uid;
@@ -84,60 +83,32 @@ sub createEntry {
 
 sub storeMail {
     my ($table, $uid, $mail, $key) = @_;
-
-    #Encrypt mail and insert into table using parameterized query:
-
-    my $sth = $dbh->prepare("INSERT INTO $table VALUES (?, AES_ENCRYPT(?,?));");
-    $sth->execute($uid,$mail,$key) 
+    $dbh->do("INSERT INTO $table VALUES ($uid, AES_ENCRYPT(?,?))",undef,$mail,$key);
 }
 
 sub retrieveMail {
     my ($table, $uid, $key) = @_; 
-    
-    my $sth = $dbh->prepare("SELECT AES_DECRYPT((SELECT mail FROM $table WHERE uid = $uid),'$key')");
-    $sth->execute();
-    my $mail = $sth->fetchrow_array();
+
+    my $mail = $dbh->selectrow_array("SELECT AES_DECRYPT((SELECT mail FROM $table WHERE uid = $uid),'$key')");
 
     return $mail;
 }
 
-=item deleteMessageByUID(table name, uid)
-
-    Delete the specified message from the specified table.
-    Arguments: table name, UID.
-    Returns: None.
-
-=cut
-
-sub deleteMessageByUID {
+sub deleteRow {
     my $table_name = shift;
     my $uid = shift;
     $dbh->do("DELETE FROM $table_name WHERE UID = $uid;");
 }
 
-=item getMessagesByTime(table name, time)
+sub getMessagesToReturn {
+    my $key = shift;
+    my @rows = $dbh->selectall_arrayref("SELECT Messages.uid, AES_DECRYPT(ParsedMail.mail, '$key') AS mail FROM Messages INNER JOIN ParsedMail WHERE Messages.uid = ParsedMail.uid AND Messages.return_time < NOW()", { Slice => {} });
+    return @rows
+}
 
-    Retrieve all messages from the specified table whose return time is less than the specified time.
-    Arguments: Table name, time in epoch seconds.
-    Returns: A list of message hashrefs.
-
-=cut
-
-sub getMessagesByTime {
-    my $table_name = shift;
-    my $return_time = shift;
-
-    my @messages;
-
-    #&sql("SELECT * FROM $table_name WHERE return_time < $return_time;");
-    
-    my $hash_ref;
-    #while ($hash_ref = $sth->fetchrow_hashref) {
-#	my %message = %$hash_ref;
-#	push @messages, \%message;
-#    }
-
-    return @messages;
+sub markAsSent {
+    my $uid = shift;
+    $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
 }
 
 =item getTable(table name) 
@@ -147,26 +118,6 @@ sub getMessagesByTime {
     Returns: An array ref. Each element of the referent is an array ref to a row.
 
 =cut
-
-sub getTable {
-    my $table_name = shift;
-
-    #Get the entire table:
-#    &sql("SELECT * FROM $table_name");
-#    my @table = @{ $sth->fetchall_arrayref }; #this is an array of array refs
- 
-    #Get the column names:
-    #this returns a table with one column. Each row is the name of a column in $table_name
-#    &sql("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.Columns where TABLE_NAME = '$table_name'");  
-#    my @rows = @{ $sth->fetchall_arrayref }; #this is an array of array refs
-#    my @col_names; 
-#    push @col_names, $_->[0] for @rows; #Get the first column of the row
-
-#    #Add the column names to the table:
-#    unshift @table, \@col_names;
-
-#    return \@table;
-}
 
 
 
@@ -233,6 +184,14 @@ sub getTable {
 =cut
 
 =item retrieveMail
+
+=cut
+
+=item deleteMessageByUID(table name, uid)
+
+    Delete the specified message from the specified table.
+    Arguments: table name, UID.
+    Returns: None.
 
 =cut
 

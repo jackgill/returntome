@@ -6,6 +6,7 @@ use strict;
 use warnings;
 
 use Data::Dumper::Simple;
+use DateTime;
 
 use Mod::DB;
 use Mod::Test;
@@ -27,15 +28,14 @@ my %conf = %{ &getConf("conf/test.conf") };
 #Run tests:
 
 #&testGetSchemas;
-#&testResetDB;
+&testResetDB;
 #&testCreateEntry;
 #&testStoreMail;
 #&testRetrieveMail;
-
-#&testDeleteMessageByUID;
-#&testGetMessagesByTime;
-#&testDeleteMessagesByTime;
-#&testGetTable('ParsedMessages');
+#&testDeleteRow;
+&populateDB;
+#&testGetMessagesToReturn;
+&testMarkAsSent;
 
 #Disconnect from the DB:
 &Mod::DB::disconnect;
@@ -69,24 +69,27 @@ sub testRetrieveMail {
     print "mail: $mail\n";
 }
 
-sub testDeleteMessageByUID {
-    &deleteMessageByUID('ParsedMessages','000000000');
+sub testDeleteRow {
+    &deleteRow('RawMail','2');
 }
 
-sub testGetMessagesByTime {
-    my @messages = &getMessagesByTime('SentMessages',time);
-    print Dumper(@messages);
+sub populateDB {
+    my @messages = &createMessages(2,2,'foo@bar.com');
+    for my $message (@messages) {
+	my $mail = $message->{mail};
+	my $return_time = $message->{return_time};
+	my $uid = &createEntry('foo@bar.com',$return_time);
+	&storeMail('ParsedMail',$uid,$mail,'foo');
+    }
 }
 
-sub testDeleteMessagesByTime {
-    &deleteMessagesByTime('ParsedMessages',time);
+sub testGetMessagesToReturn {
+    my @messages = &getMessagesToReturn('foo');
+    for (@messages) {
+	print Dumper($_);
+    }
 }
 
-
-sub testGetTable {
-    my $table_name = shift;
-    my $table = &getTable($table_name);
-    print Dumper($table);
+sub testMarkAsSent {
+    &markAsSent('1');
 }
-
-
