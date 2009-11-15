@@ -63,7 +63,7 @@ for (@conf_vars) {
 }
 
 #Connect to DB:
-&Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+&Mod::DB::connect("mysql:database=" . $conf{db_server, db_user, db_pass});
 
 #Set up signal handlers:
 $SIG{HUP}  = sub { &quit("SIGHUP") };
@@ -110,11 +110,11 @@ while (1) {
 sub checkIncoming {
 
     #Check for new messages:
-    my @mails = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass});
+    my @mail = &getMail($conf{imap_server, imap_user, imap_pass});
  
-    my @parsed_messages; #messages we parsed, and have a return time.
+    my @return_messages; #messages we are going to return immediately
     
-    my $nMessages = @mails;
+    my $nMessages = scaler @mail;
     if ($nMessages != 0) {#If we have mail, log the number of new messages:
 	$logger->info("Retrieved $nMessages messages from IMAP server");
     } else {#If we don't have mail, return:
@@ -122,36 +122,35 @@ sub checkIncoming {
     }
     
     #Go through the mail:
-    for my $mail (@mails) {
-	#Assign a UID:
-	my $uid = &getUID;
+    for my $raw_mail (@mail) {
 	
-	#Parse the message:
-	my %message = %{ &parseMail($mail,$conf{smtp_user}) }; 
-	$message{uid} = $uid;
-	my $return_time = $message{return_time};
+	#Attempt to MIME parse the message:
+	my $message; #hashref
+	eval { $message = &parseMail($mail, $conf{smtp_user}) }; 
 
-	    $logger->info("Message $uid is too big.");
-	    push @too_big_messages, \%message;
-	} else {
+	if ($@) { #MIME parsing failed
+	    $logger->error("Error MIME parsing message: $@");
+	    my $uid = &createEntry(undef,time,undef);
+	    &storeMail('RawMail',$uid, $raw_mail, $key);
+	} else { #MIME parsing succeeded
+	    my $return_time = $message->{return_time};
+	    my $address = $message->{address};
+	    my $parsed_mail = $message->{mail};
+	    my $uid = &createEntry($address, time, $return_time);
+	    &storeMail('RawMail',$uid, $raw_mail, $key);
+	    &storeMail('ParsedMail',$uid, $parsed_mail, $key);
+
 	    if ($return_time) { #Parsing succeeded.
-		$logger->info("Return date for message $uid: " . &fromEpoch($return_time));
-		push @parsed_messages, \%message;
+		$logger->info("Return date for message $uid: " . $return_time);
 	    } else { #Parsing failed.
 		$logger->info("Message $uid had no readable date.");
-		push @unparsed_messages, \%message;
+		push @return_messages, $message;
 	    }
 	}
     }
 
-    #Store the parsed and unparsed messages in the appropriate tables:
-    &putUnparsedMessages('RawMessages',&encryptMessages($key,@raw_messages));
-    &putParsedMessages('ParsedMessages',&encryptMessages($key,@parsed_messages)) if (@parsed_messages);
-    &putUnparsedMessages('UnparsedMessages',&encryptMessages($key,@unparsed_messages)) if (@unparsed_messages);
-
     #If we couldn't parse the message, return it to sender:
-    &sendMessages(@unparsed_messages) if (@unparsed_messages);
-    &sendMessages(@too_big_messages) if (@too_big_messages);
+    &sendMessages(@return_messages) if (@return_messages);
 }
 
 =item checkOutgoing
@@ -165,33 +164,20 @@ sub checkIncoming {
 
 sub checkOutgoing {
     #Check the database for messages to send:
-    my @messages = &getMessagesByTime('ParsedMessages',time);
-    &deleteMessagesByTime('ParsedMessages',time);
+    my @messages = &getMessagesToReturn(time, $key);
 
     #Send the messages:
-    &sendMessages(&decryptMessages($key,@messages));
-}
+    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server, smtp_user, smtp_pass},@messages);
 
-=item sendMessages(messages)
+    #Mark the messages as sent
+    for my $message (@$sent_ref) {
+	&markAsSent($message->{uid});
+    }
 
-    Calls &Mod::SendMail::sendMail,
-    then encrypts and stores the sent and unsent messages in the database.
-
-    Arguments: A list of hash refs, each referring to an unencrypted message.
-    Returns: None.
-
-=cut
-
-sub sendMessages {
-    my @messages = @_;
-    return unless @messages;
-
-    #Send the messages:
-    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},@messages);
-
-    #Store the sent and unsent messages:
-    &putParsedMessages('SentMessages',&encryptMessages($key,@$sent_ref));
-    &putParsedMessages('UnsentMessages',&encryptMessages($key,@$unsent_ref));
+    #Log any errors:
+    for my $message (@$unsent_ref) {
+	$logger->error("Failed to send message " . $message->{uid});
+    }
 }
 
 =item mailAdmin(text)
@@ -206,9 +192,9 @@ sub mailAdmin {
     my $mail = "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n";
     my %message = (
 	mail => $mail,
-	uid => 'mailadmin', #Mod::SendMail will log this
+	address => $conf{admin_address},
 	);
-    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server},$conf{smtp_user},$conf{smtp_pass},\%message);
+    my ($sent_ref,$unsent_ref) = &sendMail($conf{smtp_server, smtp_user, smtp_pass},\%message);
     $logger->error("Error: failed to mail admin: $text") if (@$unsent_ref);
 }
 

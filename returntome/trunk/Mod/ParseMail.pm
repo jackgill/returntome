@@ -63,7 +63,7 @@ sub parseMail {
     my $parsed_mail = 
 	"From: $outgoing\n" .
 	"To: $from" .
-	"Subject: R2M: $subject" ;    
+	"Subject: R2M: $subject" ;    #TODO: What if subject is encoded? MIME::Head->decode('I_KNOW_WHAT_I_AM_DOING')
 
     #Find the text/plain and text/html parts of the message:
     my $text_plain;
@@ -71,9 +71,10 @@ sub parseMail {
 
     if ($head->count('MIME-Version')) {#Message is MIME formatted
 	#Add MIME headers to mail:
-	$parsed_mail .= 
-	    "MIME-Version: " . $head->get('MIME-Version',0) .
-	    "Content-Type: " . $head->get('Content-Type',0);
+	my @headers = ('MIME-Version','Content-Type','Content-Transfer-Encoding');
+	for my $header (@headers) {
+	    $parsed_mail .= "$header: " . $head->get($header);
+	}
 
 	switch($entity->effective_type) {
 	    case 'multipart/mixed' { #there are attachments

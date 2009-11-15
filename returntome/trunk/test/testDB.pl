@@ -9,7 +9,6 @@ use Data::Dumper::Simple;
 
 use Mod::DB;
 use Mod::Test;
-use Mod::TieHandle;
 use Mod::Conf;
 use Mod::Crypt;
 
@@ -17,27 +16,26 @@ use Mod::Crypt;
 Log::Log4perl::init('conf/log4perl_test.conf');
 my $logger = Log::Log4perl->get_logger();
 
-#Send STDERR to logger:
-tie(*STDERR, 'Mod::TieHandle');
 
 #Get config:
 my %conf = %{ &getConf("conf/test.conf") };
 
 #Connect to the DB:
-&Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
+
+&Mod::DB::connect(@conf{'db_server', 'db_user', 'db_pass'});
 
 #Run tests:
+
 #&testGetSchemas;
-#&testMakeTables;
-#&testClearTables;
-#&testPutMessages('ParsedMessages');
-#&testGetMessageByUID;
+#&testResetDB;
+#&testCreateEntry;
+#&testStoreMail;
+#&testRetrieveMail;
+
 #&testDeleteMessageByUID;
 #&testGetMessagesByTime;
 #&testDeleteMessagesByTime;
-#&testGetUID;
-&testGetTable('ParsedMessages');
-#&testShowTables();
+#&testGetTable('ParsedMessages');
 
 #Disconnect from the DB:
 &Mod::DB::disconnect;
@@ -53,25 +51,22 @@ sub testGetSchemas {
     }
 }
 
-sub testMakeTables {
-    &makeTables;
+sub testResetDB {
+    &resetDB;
 }
 
-sub testClearTables {
-    &clearTables;
+sub testCreateEntry {
+    my $uid = &createEntry('foo@bar.com','2009-12-01 12:13:44');
+    print "UID: $uid\n";
 }
 
-sub testPutMessages {
-    my $table_name = shift;
-    my @messages = &createMessages(2,2);
-    #my $key = &getKey;
-    #&putMessages($table_name,&encryptMessages($key,@messages));
-    &putParsedMessages($table_name,@messages);
+sub testStoreMail {
+    &storeMail('RawMail',2,'this here is a mail message','foo');
 }
 
-sub testGetMessageByUID {
-    my %message = &getMessageByUID('SentMessages','000000000');
-    print Dumper(%message);
+sub testRetrieveMail {
+    my $mail = &retrieveMail('RawMail',2,'foo');
+    print "mail: $mail\n";
 }
 
 sub testDeleteMessageByUID {
@@ -87,11 +82,6 @@ sub testDeleteMessagesByTime {
     &deleteMessagesByTime('ParsedMessages',time);
 }
 
-sub testGetUID {
-    for (my $i = 0; $i < 5; $i++) {
-	print &getUID,"\n";
-    }
-}
 
 sub testGetTable {
     my $table_name = shift;
@@ -99,7 +89,4 @@ sub testGetTable {
     print Dumper($table);
 }
 
-sub testShowTables {
-    &showTables(&getKey);
-}
 
