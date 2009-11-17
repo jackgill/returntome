@@ -7,16 +7,11 @@ use strict;
 
 use Exporter;
 
-#use IO::Scalar;
-#use Time::Piece;
 use MIME::Lite;
-#use Data::Dumper::Simple;
 use DateTime;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(&createMessages);
-
-my $logger = Log::Log4perl->get_logger();
 
 sub createMessages {
     my $nMessages = shift;
