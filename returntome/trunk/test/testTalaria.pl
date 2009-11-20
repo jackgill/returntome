@@ -23,14 +23,14 @@ use Date::Manip;
 Log::Log4perl::init('conf/log4perl_test.conf');
 
 #Read the config file:
-my %conf = %{ &getConf("conf/test.conf") };
+my %conf = %{ &getConf("conf/test.conf",'foo') };
 
 #Clear inbox:
-&getMail(@conf{'imap_server', 'imap_user', 'imap_pass'})
+&getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
 
 #Create mail:
-my $nMessages = 10; 
-my $nMinutes = 20;
+my $nMessages = 2; 
+my $nMinutes = 4;
 my @messages = &createMessages($nMessages,$nMinutes,'return.to.me.test@gmail.com');
 
 #Load the requested return times into a hash keyed by subject:
@@ -45,7 +45,7 @@ for my $message (@messages) {
 #Sending more than 2 messages at a time seems to trip gmail's spam filter,
 #so we send them one at a time.
 for my $message (@messages) {
-    &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},$message)
+    &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},$message);
     sleep 15;
 }
 

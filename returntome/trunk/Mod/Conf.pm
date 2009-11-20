@@ -44,7 +44,7 @@ sub getConf {
     my @conf_vars = qw(
 imap_server imap_user imap_pass 
 smtp_server smtp_user smtp_pass 
-db_server db_user db_pass 
+db_server db_user db_pass db_key
 interval
 admin_address
 );
