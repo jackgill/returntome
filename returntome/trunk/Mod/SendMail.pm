@@ -56,14 +56,14 @@ sub sendMail {
     my @messages = @_;
     return unless @messages;
 
+    #Get the logger:
     my $logger = Log::Log4perl->get_logger();
-    my $smtp;
 
-    #Return values:
-    my @unsent_messages;
-    my @sent_messages;
+    #We will return a list of UIDs for messages we sent successfully:
+    my @sent_uids;
 
     #Connect to the SMTP server:
+    my $smtp;
     unless ($smtp = Net::SMTP::SSL->new($smtp_server, Port => 465, Debug => 0)) {
 	$logger->error("Could not connect to SMTP server");
 	return [],\@messages; 
@@ -98,16 +98,14 @@ sub sendMail {
 	#Check the SMTP response:
 	my $smtp_response = $smtp->message;
 	if ($smtp_response =~ /2.0.0 OK/) {
-	    $logger->info("Sent message $uid.");
-	    push @sent_messages, $message;
+	    push @sent_uids, $uid;
 	} else {
 	    $logger->error("Did not send message $uid.");
 	    $logger->error($smtp_response);
-	    push @unsent_messages, $message;
 	}
     }
     $smtp->quit;
-    return \@sent_messages,\@unsent_messages;
+    return @sent_uids;
 }
 
 =back

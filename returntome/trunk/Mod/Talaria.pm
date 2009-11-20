@@ -41,9 +41,6 @@ sub checkIncoming {
     
     my @error_messages; #messages we are going to return immediately
     
-    #If we have mail, log the number of new messages:
-    $logger->info("Retrieved " . scalar @mail ." messages from IMAP server") if (scalar @mail);    
-
     #Prepare SQL statements:
     my $create_entry = $dbh->prepare("INSERT INTO Messages VALUES (NULL, ?, NOW(), ?, NULL)");
     my $store_raw = $dbh->prepare("INSERT INTO RawMail VALUES (?, AES_ENCRYPT(?,?))");
@@ -123,19 +120,17 @@ sub checkOutgoing {
 
     my @messages = @{ $messages_ref };
 
-    #Send the messages:
-    &sendMessages(@messages) if (@messages);
+    &sendMessages(@messages);
 }
 
 sub sendMessages {
     my @messages = @_;
 
     #Send the messages:
-    my ($sent_ref,$unsent_ref) = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},@messages);
+    my @sent_uids = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},@messages);
 
     #Mark the messages as sent
-    for my $message (@$sent_ref) {
-	my $uid = $message->{uid};
+    for my $uid (@sent_uids) {
 	$dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
     }
 }
@@ -150,10 +145,10 @@ sub mailAdmin {
 	);
 
     #Send the message:
-    my ($sent_ref,$unsent_ref) = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
+    my @sent_uids = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
     
     #Log any errors:
-    $logger->error("Error: failed to mail admin: $text") if (@$unsent_ref);
+    $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
 }
 
 sub quit {
