@@ -15,8 +15,7 @@ use Carp;
 use File::Path;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(&getHeader &parseMail &parseInstructions &fromEpoch &now);
-
+our @EXPORT = qw(getHeader parseMail parseInstructions fromEpoch);
 
 my $logger = Log::Log4perl->get_logger();
 
@@ -119,7 +118,8 @@ sub parseMail {
 		$text_plain = $entity;
 	    }
 	}
-    } else {#Message is not MIME formatted
+    }
+    else {#Message is not MIME formatted
 	$text_plain = $entity;
     }
 
@@ -140,18 +140,24 @@ sub parseMail {
     }
 
     if  ($instructions) { #instructions were found
-	my ($date, $epoch) = &parseInstructions($instructions);
-	$return_time = $date;
-	if ($return_time) {#instructions parsing succeeded 
+	$return_time = &parseInstructions($instructions);
+
+	if ($return_time) {#instructions parsing succeeded
 	    #Check for return dates in the past:
-	    $error_message = "You specified a return date in the past." if ($epoch < time);
+            if ($return_time lt fromEpoch(time)) {
+                $error_message = "You specified a return date in the past.";
+            }
 
 	    #Check for return dates too far in the future:
-	    $error_message = "Sorry, we do not accept messages with a return date more than a year in the future." if ($epoch > time + 60 * 60 * 24 * 365);
-	} else {#instructions parsing failed
+            if ($return_time gt fromEpoch(time + 60 * 60 * 24 * 365)) {
+                $error_message = "Sorry, we do not accept messages with a return date more than a year in the future.";
+            }
+	}
+        else {#instructions parsing failed
 	    $error_message = "Sorry, we could not understand these instructions.";
 	}
-    } else {#instructions were not found, add an error message:
+    }
+    else {#instructions were not found, add an error message:
         $error_message = "Sorry, we could not find instructions in this message.";
     }
 
@@ -256,9 +262,9 @@ sub parseInstructions {
     return unless $result;
 
     my $date = UnixDate($result,"%Y-%m-%d %T");
-    my $epoch = UnixDate($result,"%s");
+    #my $epoch = UnixDate($result,"%s");
 
-    return $date, $epoch;
+    return $date;
 }
 
 
@@ -266,14 +272,12 @@ use DateTime;
 
 sub fromEpoch {
     my $epoch = shift;
-    my $dt;
-    eval {$dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');};
-    if ($@) {
-	$logger->error($@);
-	return "error";
-    } else {
-	return $dt->hms . " " . $dt->mdy;
-    }
+    return unless $epoch;
+
+    #TODO: more input validation?
+
+    my $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
+    return $dt->ymd . " " . $dt->hms;
 }
 
 1;
