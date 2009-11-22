@@ -26,9 +26,9 @@ R2M: 8-11-09 8:18 pm
 this is the body
     
 EOF
-    
+
 $message = &parseMail($mail,'return.to.me.test@gmail.com');
-ok(&fromEpoch($message->{return_time}) eq '21:18:00 08-11-2009','Not MIME');
+is( $message->{return_time}, '2009-08-11 20:18:00','Not MIME');
 
 $mail = <<'EOF';
 Delivered-To: return.to.me.receive@gmail.com
@@ -79,7 +79,7 @@ R2M: 8-11-09 8:18 pm<br><br>this is the body.<br><br>
 EOF
 
 $message = &parseMail($mail,'return.to.me.test@gmail.com');
-ok(&fromEpoch($message->{return_time}) eq '21:18:00 08-11-2009','multipart/alternative');
+is( $message->{return_time}, '2009-08-11 20:18:00','multipart/alternative');
 #print $message->{parsed_mail};
 
 $mail = <<'EOF';
@@ -143,8 +143,8 @@ dGhpcyBpcyBhIHRleHQgYXR0YWNobWVudC4Kb29oIGxhIGxhLgo=
 
 EOF
 
-$message = &parseMail($mail,'return.to.me.test@gmail.com');
-ok(&fromEpoch($message->{return_time}) eq '21:18:00 08-11-2009','multipart/mixed');
+$message = parseMail($mail,'return.to.me.test@gmail.com');
+is( $message->{return_time}, '2009-08-11 20:18:00','multipart/mixed');
 #print $message->{parsed_mail};
 
 $mail = <<'EOF';
@@ -247,6 +247,7 @@ href=3D"http://www.adobe.com/go/connectpro_overview">Click here</a></li>
 
 EOF
 
-$message = &parseMail($mail,'return.to.me.test@gmail.com');
-ok(&fromEpoch($message->{return_time}) eq '','multipart/mixed');
-print $message->{parsed_mail};
+$message = parseMail($mail,'return.to.me.test@gmail.com');
+#TODO: need to calculate date for "next friday"
+is( $message->{return_time}, '2009-11-20 07:55:00','multipart/mixed');
+#print $message->{mail};

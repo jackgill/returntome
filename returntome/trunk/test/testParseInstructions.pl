@@ -7,8 +7,7 @@ use warnings;
 
 use Mod::ParseMail;
 
-#Initialize logger:
-Log::Log4perl::init('conf/log4perl_test.conf');
+#TODO: re-write using Test::More
 
 #The instructions to test:
 my @instructions = (
@@ -28,8 +27,8 @@ printf $format,"Instructions","Result";
 printf $format, "-" x 19,"-" x 19;
 
 #Test instructions:
-for (@instructions) {
-    my $result = &parseInstructions($_);
+for my $instruction (@instructions) {
+    my $result = &parseInstructions( $instruction );
     $result = "error" unless $result;
-    printf $format,$_,$result;
+    printf $format, $instruction, fromEpoch($result);
 }

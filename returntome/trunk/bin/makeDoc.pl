@@ -7,6 +7,8 @@ use warnings;
 
 use Pod::Simple::HTMLBatch;
 
+#TODO: roll my own index page to separate programs from modules
+
 my $batchconv = Pod::Simple::HTMLBatch->new;
 my @search_dirs = qw(Mod bin);
 my $output_dir = 'doc';

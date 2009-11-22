@@ -12,7 +12,7 @@ use Mod::Conf;
 use Mod::Crypt;
 
 #Conf variables:
-my $key_digest = 'conf/key.sha1_base64';
+my $key_digest = 'conf/key_digest';
 my $conf_file = "conf/talaria.conf";
 
 #Get encryption key:
@@ -22,10 +22,15 @@ my $key = &getCheckedKey($key_digest);
 my %conf = %{ &getConf($conf_file, $key) };
 
 #Connect to DB:
-my $dbh = DBI->connect("DBI:mysql:database=$conf{db_server}",$conf{db_user},$conf{db_pass},{PrintError => 0, RaiseError => 1});
+my $dbh = DBI->connect(
+    "DBI:mysql:database=$conf{db_server}",
+    $conf{db_user},
+    $conf{db_pass},
+    {PrintError => 0, RaiseError => 1}
+);
 
 #Run tests:
-&populateDB;
+populateDB();
 
 #Disconnect from the DB:
 $dbh->disconnect();

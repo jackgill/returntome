@@ -11,9 +11,14 @@ use Mod::Conf;
 use Log::Log4perl;
 
 Log::Log4perl::init('conf/log4perl_test.conf');
-my %conf = %{&getConf("conf/test.conf")};
-my @messages = &getMail($conf{imap_server},$conf{imap_user},$conf{imap_pass},0);
+
+my %conf = %{ getConf('conf/test.conf', 'foo') };
+
+my @messages = &getMail( @conf{'imap_server', 'imap_user', 'imap_pass'} );
+
 die "No messages\n" unless (@messages);
-for (@messages) {
-    print;
+
+for my $message (@messages) {
+    print $message;
+    print "\n",'-' x 78,"\n";
 }

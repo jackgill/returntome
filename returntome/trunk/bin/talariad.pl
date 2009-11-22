@@ -15,7 +15,7 @@ use Mod::Crypt;
 use Mod::Talaria;
 
 #Determine mode:
-die "Usage: $0 mode\n" unless (scalar @ARGV == 1);
+die "Usage: $0 (incoming|outgoing)\n" unless (scalar @ARGV == 1);
 
 my $mode = $ARGV[0];
 my $subroutine_ref;
@@ -37,7 +37,7 @@ my $cwd = $ENV{PWD};
 
 #Various conf variables:
 my $conf_file  = "$cwd/conf/talaria.conf";
-my $key_digest = "$cwd/conf/key.sha1_base64";
+my $key_digest = "$cwd/conf/key_digest";
 my $pid_file   = "$cwd/talariad_$mode.pid";
 
 #Only one instance at a time, please:

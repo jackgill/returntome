@@ -8,7 +8,7 @@ use Net::SMTP::SSL;
 use Log::Log4perl;
 
 our @ISA = ("Exporter");
-our @EXPORT = qw(sendMessages sendMail);
+our @EXPORT = qw(sendMessages);
 
 sub sendMessages {
     my $smtp_server = shift;
@@ -69,35 +69,6 @@ sub sendMessages {
     return @sent_uids;
 }
 
-sub sendMail {
-    my ($smtp_server, $from_address, $password, $to_address, $mail) = @_;
-
-    #Connect to the SMTP server:
-    my $smtp;
-    unless ($smtp = Net::SMTP::SSL->new($smtp_server, Port => 465, Debug => 0)) {
-	die "Could not connect to SMTP server\n";
-    }
-
-    #Authenticate to the SMTP server:
-    unless ($smtp->auth($from_address, $password)) {
-	die "Could not authenticate to SMTP server\n";
-    }
-
-    #Send the mail
-    $smtp->mail($from_address . "\n");
-    $smtp->to($to_address . "\n");
-    $smtp->data();
-    $smtp->datasend($mail . "\n");
-    $smtp->dataend();
-
-    #Check the SMTP response:
-    my $smtp_response = $smtp->message;
-    unless ($smtp_response =~ /2.0.0 OK/) {
-        $smtp->quit;
-        die "Failed to send mail: $smtp_response\n";
-    }
-    $smtp->quit;
-}
 
 1;
 
@@ -162,36 +133,6 @@ I<Returns:>
 A list of uids corresponding to messages which were successfully sent.
 
 =back
-
-=item *
-
-B<sendMail>
-
-Send a single email.
-
-I<Arguments:>
-
-=over
-
-=item *
-
-name of SMTP server
-
-=item *
-
-login to SMTP server, assumed to be the same as the sending address
-
-=item *
-
-password to SMTP server
-
-=item *
-
-the address to send the mail to
-
-=item *
-
-the text of the mail
 
 =back
 

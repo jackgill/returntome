@@ -14,18 +14,30 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(&createMessages);
 
 sub createMessages {
-    my $nMessages = shift;
-    my $nMinutes = shift;
-    my $to = shift;
+    my ($nMessages, $nMinutes, $to) = @_;
+
     my @messages;
     for (my $i = 0; $i < $nMessages; $i++) {
+
+        #Determine when this message will be returned, in epoch sends
 	my $return_time = time + $nMessages * 15 + int(rand($nMinutes * 60));
+
+        #Parse the return time
 	my $dt = DateTime->from_epoch( epoch => $return_time, time_zone => 'America/Denver');
-	my $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i";
-	if ($i >= ($nMessages - 2)) {	
+
+        #Compose the body of the message
+	my $body;
+
+        #The last two messages will have no instructions
+	if ($i >= ($nMessages - 2)) {
 	    $body = "no instructions here...";
 	    $return_time = time + $nMessages * 15;
 	}
+        else {
+            $body = "R2M: " . $dt->hms . " " . $dt->mdy . "\nbody $i";
+        }
+
+        #Construct the MIME message
 	my $msg = MIME::Lite->new(
 	    From    => 'return.to.me.receive@gmail.com',
 	    To      => $to,
@@ -40,52 +52,86 @@ sub createMessages {
 	    Type => 'text/html',
 	    Data => '<br>' . $body . '<br>',
 	    );
+
+        #Construct the message hash
 	my %message = (
 	    mail => $msg->as_string,
 	    return_time => $dt->ymd . " " . $dt->hms,
-	    address => 'return.to.me.test@gmail.com',
+	    address => $to,
 	    );
+
 	push @messages, \%message;
     }
+
     return @messages;
 }
 
 1;
-	
+
 =head1 NAME
 
-    Mod::Test
-
-=cut
+Mod::Test
 
 =head1 SYNOPSIS
 
-    my @messages = &createMessages($nMessages,$nMinutes);
-
-=cut
+C<my @messages = &createMessages($nMessages,$nMinutes);>
 
 =head1 DESCRIPTION
 
-    A collection of routines used for testing.
+A collection of routines used for testing.
 
-=cut
+=head1 SUBROUTINES
 
-=head1 FUNCTIONS
+=over
 
-=over 
+=item *
 
-=cut
+B<createMessages>
 
-=item createMessages(nMessages, nMinutes)
+Generate new messages.
+The last two messages will have no instructions.
 
-    Generate new messages. 
+I<Arguments:>
 
-    Arguments: the number of messages to be generated, and the number of minutes into the future for which the return times will be generated. The last two messages will have no instructions.
-    Returns: A list of message hash refs.
+=over
 
-=cut
+=item *
 
+The number of messages to be generated
+
+=item *
+
+The number of minutes into the future for which the return times will be generated.
+
+=item *
+
+The address to which the messages will be sent
 
 =back
 
-=cut
+I<Returns:>
+
+=over
+
+=item *
+
+A list of message hash refs.
+
+=back
+
+=back
+
+=head1 DEPENDENCIES
+
+=over
+
+=item *
+
+MIME::Lite
+
+=item *
+
+DateTime
+
+=back
+

@@ -8,6 +8,9 @@ use warnings;
 use Mod::Ad;
 
 my $html_ad = &getHTMLAd;
-print "$html_ad\n";
+print "HTML Ad:\n$html_ad\n";
+
+print "\n";
+
 my $plain_ad = &getPlainAd;
-print "$plain_ad\n";
+print "Plain Ad:\n$plain_ad\n";

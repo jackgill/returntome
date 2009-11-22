@@ -16,7 +16,7 @@ sub getConf {
     my ($file, $key) = @_;
 
     my %conf; #stores conf variables
- 
+
     #Open the conf file:
     open(CONFIG,"<$file") or die "Couldn't open $file: $!\n";
     my @slurp = <CONFIG>;
@@ -39,7 +39,7 @@ sub getConf {
 	my ($var, $value) = split(/\s*=\s*/, $_, 2);
 	$conf{$var} = $value;
     }
-    
+
     #Check that conf variables are defined:
     my @conf_vars = qw(
 imap_server imap_user imap_pass 
@@ -60,34 +60,56 @@ admin_address
 
 =head1 NAME
 
-    Mod::Conf
-
-=cut
+Mod::Conf
 
 =head1 SYNOPSIS
 
-    my %conf = %{ &getConf("/some/conf.txt") };
-    my %conf = %{ &getCipherConf("/some/conf.txt","password") };
+C<my %conf = %{ &getConf("/some/conf.txt","password") };>
 
 =cut
 
 =head1 DESCRIPTION
 
-    A module for reading configuration files.
+A module for reading encrypted configuration files.
 
 =cut
 
-=head1 FUNCTIONS
+=head1 SUBROUTINES
 
-=over 
+=over
 
-=item getConf(file, key)
+=item *
 
-    Arguments: The path to the configuration file, the encryption key.
-    Returns: A reference to hash containing the key,value pairs from the file.
+getConf(file, key)
 
-=cut
+I<Arguments:>
+
+=over
+
+=item *
+
+The path to the configuration file, the encryption key.
 
 =back
 
-=cut
+I<Returns:>
+
+=over
+
+=item *
+
+A reference to hash containing the key,value pairs from the file.
+
+=back
+
+=back
+
+=head1 DEPENDENCIES
+
+=over
+
+=item *
+
+Mod::Crypt
+
+=back

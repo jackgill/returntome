@@ -9,11 +9,15 @@ use Data::Dumper::Simple;
 
 use Mod::Test;
 
-&testCreateMessages;
+testCreateMessages();
 
 sub testCreateMessages {
-    my @messages = &createMessages(2,2);
+    #Create messages:
+    my @messages = createMessages(2,2,'return.to.me.receive@gmail.com');
+
+    #Print messages:
     for my $message (@messages) {
 	print Dumper($message);
+        print "\n", '-' x 78, "\n";
     }
 }

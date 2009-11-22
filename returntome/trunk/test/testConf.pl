@@ -6,17 +6,13 @@ use strict;
 use warnings;
 
 use Data::Dumper::Simple;
+
 use Mod::Conf;
 
-&testGetCipherConf;
+&testGetConf;
 
 sub testGetConf {
-    my %conf = %{ &getConf("conf/talaria.conf") };
+    my %conf = %{ getConf('conf/test.conf','foo') };
     print Dumper(%conf);
 }
 
-sub testGetCipherConf {
-    my %conf = %{ &getCipherConf("conf/talaria.conf.crypt") };
-    die "Failed to decrypt conf file.\n" unless (%conf);
-    print Dumper(%conf);
-}
