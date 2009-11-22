@@ -27,7 +27,12 @@ sub setConf {
 }
 
 sub connectDB {
-    $dbh = DBI->connect("DBI:mysql:database=$conf{db_server}",$conf{db_user},$conf{db_pass},{PrintError => 0, RaiseError => 1});
+    $dbh = DBI->connect(
+        "DBI:mysql:database=$conf{db_server}",
+        $conf{db_user},
+        $conf{db_pass},
+        {PrintError => 0, RaiseError => 1}
+    );
 }
 
 sub disconnectDB {
@@ -38,9 +43,9 @@ sub checkIncoming {
 
     #Check for new messages:
     my @mail = &getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
-    
+
     my @error_messages; #messages we are going to return immediately
-    
+
     #Prepare SQL statements:
     my $create_entry = $dbh->prepare("INSERT INTO Messages VALUES (NULL, ?, NOW(), ?, NULL)");
     my $store_raw = $dbh->prepare("INSERT INTO RawMail VALUES (?, AES_ENCRYPT(?,?))");
@@ -51,30 +56,30 @@ sub checkIncoming {
     for my $raw_mail (@mail) {
 
 	my $message; #hashref
-	
+
 	#Attempt to MIME parse the message:
 	eval { 
 	    $message = &parseMail($raw_mail, $conf{smtp_user});
 	}; 
 
 	#If MIME parsing failed, store raw mail and move on to next message
-	if ($@) { 
+	if ($@) {
 	    $logger->error("Error MIME parsing message: $@");
 
 	    #Try to store message in DB:
-	    eval { 
+	    eval {
 		$create_entry->execute(undef, undef);
 		my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
 		$store_raw->execute($uid, $raw_mail, $conf{db_key});
 	    };
 
 	    #If we can't store the message in the DB, log it
-	    if ($@) { 
+	    if ($@) {
 		my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
 		$logger->error($encrypted_mail);
 	    }
 	    next MAIL;
-	} 
+	}
 
 	#Unpack message:
 	my $return_time = $message->{return_time};
@@ -82,13 +87,13 @@ sub checkIncoming {
 	my $parsed_mail = $message->{mail};
 
         #Try to store message in DB
-	eval {  
+	eval {
 	    #Create an entry and set UID for this message:
 	    $create_entry->execute($address, $return_time);
 	    my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
 	    $uid = sprintf("%09d",$uid);
 	    $message->{uid} = $uid;
-	    
+
 	    #Store this message:
 	    $store_raw->execute($uid, $raw_mail, $conf{db_key});
 	    $store_parsed->execute($uid, $parsed_mail, $conf{db_key});
@@ -110,7 +115,12 @@ sub checkIncoming {
     }
 
     #Return messages for which there was an error to the sender:
-    &sendMessages(@error_messages);
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},@error_messages);
+
+    #Mark the messages as sent
+    for my $uid (@sent_uids) {
+	$dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+    }
 }
 
 sub checkOutgoing {
@@ -118,16 +128,8 @@ sub checkOutgoing {
     #Check the database for messages to send:
     my $messages_ref = $dbh->selectall_arrayref("SELECT Messages.uid, Messages.address, AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') AS mail FROM Messages INNER JOIN ParsedMail WHERE Messages.return_time < NOW() AND Messages.sent_time IS NULL AND Messages.uid = ParsedMail.uid", { Slice => {} });
 
-    my @messages = @{ $messages_ref };
-
-    &sendMessages(@messages);
-}
-
-sub sendMessages {
-    my @messages = @_;
-
     #Send the messages:
-    my @sent_uids = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},@messages);
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},  @{ $messages_ref } );
 
     #Mark the messages as sent
     for my $uid (@sent_uids) {
@@ -146,7 +148,7 @@ sub mailAdmin {
 
     #Send the message:
     my @sent_uids = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
-    
+
     #Log any errors:
     $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
 }
@@ -176,38 +178,110 @@ sub quit {
 
 1;
 
+=head1 NAME
+
+Mod::Talaria
+
+=head1 SYNOPSIS
+
+See bin/talariad.pl
+
+=head1 DESCRIPTION
+
+Contains subroutines used by bin/talariad.pl
+
+=head1 SUBROUTINES
+
 =over
 
-=cut
+=item *
 
-=item checkIncoming
-    
-    Check the IMAP server for new messages, parse them, store them in the database.
+B<setConf>
 
-=cut
+Set the configuration options.
 
-=item checkOutgoing
-    
-    Check the database for any messages whose return times are now in the past.
-    Retrieve those messages and send them.
-  Arguments: None.
-  Returns: None.
-    
-=cut
+I<Arguments:>
 
-=item mailAdmin(text)
+=over
 
-    Mail the administrator a message.
-    The administrator's email is given in the config file.
+=item *
 
-=cut
-
-=item quit(signal)
-
-    Exit gracefully, disconnecting from the DB and emailing a notification to the admin.
-
-=cut
+A hash ref.
 
 =back
 
-=cut
+I<Returns:> None.
+
+=item *
+
+B<checkIncoming>
+
+Check the IMAP server for new messages, parse them, store them in the database.
+
+I<Arguments:> None.
+
+I<Returns:>   None.
+
+=item *
+
+B<checkOutgoing>
+
+Check the database for any messages whose return times are now in the past.
+Retrieve those messages and send them.
+
+I<Arguments:> None.
+
+I<Returns:>   None.
+
+=item *
+
+B<mailAdmin>
+
+Mail the administrator a message.
+The administrator's email is given in the config file.
+
+I<Arguments:>
+
+=over
+
+=item *
+
+The text of the message to mail the admin.
+
+=back
+
+I<Returns:> None.
+
+=item *
+
+B<quit>
+
+Exit gracefully, disconnecting from the DB and emailing a notification to the admin.
+
+I<Arguments:>
+
+=over
+
+=item *
+
+The signal. (e.g., SIGINT)
+
+=back
+
+I<Returns:> None.
+
+=back
+
+=head1 DEPENDENCIES
+
+=over
+
+=item *
+
+Log::Log4perl
+
+=item *
+
+DBI
+
+=back
