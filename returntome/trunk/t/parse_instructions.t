@@ -24,6 +24,15 @@ push @tests, {
     got => $got,
 };
 
+$instructions = 'November 22nd, 2009';
+$expected = '2009-11-22 00:00:00';
+$got = parseInstructions($instructions);
+push @tests, {
+    instructions => $instructions,
+    expected => $expected,
+    got => $got,
+};
+
 $instructions = 'Aug 19, 2009';
 $expected = '2009-08-19 00:00:00';
 $got = parseInstructions($instructions);

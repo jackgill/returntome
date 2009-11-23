@@ -68,6 +68,7 @@ sub parseMail {
     }
     my $from = $head->get('From');
 
+
     #Initialize mail with basic headers:
     my $parsed_mail = 
 	"From: $from_address\n" .
