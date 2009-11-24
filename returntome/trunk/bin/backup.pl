@@ -29,7 +29,7 @@ given($mode) {
     when('repository') {
         $tarball = 'repository.gz';
         $subject = 'Backup';
-        system "svnadmin dump svn > repository";
+        system "svnadmin dump --quiet svn > repository";
         system "gzip repository";
     }
     default {

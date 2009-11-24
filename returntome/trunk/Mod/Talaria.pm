@@ -1,10 +1,11 @@
 package Mod::Talaria;
 
+#pragmas
 use 5.010;
-
 use strict;
 use warnings;
 
+#modules
 use Exporter;
 use Log::Log4perl;
 use DBI;
@@ -15,7 +16,7 @@ use Mod::SendMail;
 use Mod::Crypt;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(setConf connectDB disconnectDB checkIncoming checkOutgoing quit);
+our @EXPORT = qw(setConf connectDB disconnectDB checkIncoming checkOutgoing quit archiveMessages);
 
 our $dbh; #Database handle
 our %conf; #configuration variables
@@ -55,30 +56,46 @@ sub checkIncoming {
   MAIL:
     for my $raw_mail (@mail) {
 
+        my $uid;
 	my $message; #hashref
 
-	#Attempt to MIME parse the message:
-	eval { 
-	    $message = &parseMail($raw_mail, $conf{smtp_user});
-	}; 
+        #Try to create UID for message
+        eval {
+            $create_entry->execute(undef, undef);
+            $uid = $dbh->last_insert_id(undef,undef,undef,undef);
+	    $uid = sprintf("%09d",$uid);
+        };
 
-	#If MIME parsing failed, store raw mail and move on to next message
+        #If UID wasn't created, log it
+        if ($@) {
+            $logger->error("Couldn't create UID. Message follows.");
+            my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
+            $logger->error($encrypted_mail);
+            next MAIL;
+        };
+
+        #Try to store raw mail in DB
+        eval {
+            $store_raw->execute($uid, $raw_mail, $conf{db_key});
+        };
+
+        #If raw mail wasn't stored, log it
+        if ($@) {
+            $logger->error("Failed to store message $uid in RawMail");
+            my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
+            $logger->error($encrypted_mail);
+            next MAIL;
+        }
+
+	#Attempt to MIME parse the message
+	eval {
+	    $message = parseMail($raw_mail, $conf{smtp_user}, $uid);
+	};
+
+	#If MIME parsing failed, move on to next message
 	if ($@) {
 	    $logger->error("Error MIME parsing message: $@");
-
-	    #Try to store message in DB:
-	    eval {
-		$create_entry->execute(undef, undef);
-		my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
-		$store_raw->execute($uid, $raw_mail, $conf{db_key});
-	    };
-
-	    #If we can't store the message in the DB, log it
-	    if ($@) {
-		my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
-		$logger->error($encrypted_mail);
-	    }
-	    next MAIL;
+            next MAIL;
 	}
 
 	#Unpack message:
@@ -86,40 +103,44 @@ sub checkIncoming {
 	my $address = $message->{address};
 	my $parsed_mail = $message->{mail};
 
-        #Try to store message in DB
+        #Try to store parsed mail in DB
 	eval {
-	    #Create an entry and set UID for this message:
-	    $create_entry->execute($address, $return_time);
-	    my $uid = $dbh->last_insert_id(undef,undef,undef,undef);
-	    $uid = sprintf("%09d",$uid);
-	    $message->{uid} = $uid;
-
-	    #Store this message:
-	    $store_raw->execute($uid, $raw_mail, $conf{db_key});
 	    $store_parsed->execute($uid, $parsed_mail, $conf{db_key});
 	};
 
-	#If we can't store the message in the DB, log it
+        #If parsed mail wasn't stored, log it
 	if ($@) {
-	    my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
-	    $logger->error($encrypted_mail);
-
+            $logger->error("Failed to store message $uid in ParsedMail");
 	    $encrypted_mail = &encrypt($conf{db_key}, $parsed_mail);
 	    $logger->error($encrypted_mail);
+            next MAIL;
 	}
 
-	#If there was an error, we will return message to sender:
-	unless ($return_time) {
-	    push @error_messages, $message;
+	#If there we got a return time, store it.
+	if (defined $return_time) {
+            eval {
+                $dbh->do("UPDATE Messages SET return_time = $return_time WHERE uid = '$uid'");
+            };
+            if ($@) {
+                $logger->error("Failed to store return time $return_time for message $uid");
+            }
 	}
+        else { #If we didn't return the message to sender.
+            push @error_messages, $message;
+        }
     }
 
     #Return messages for which there was an error to the sender:
-    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},@error_messages);
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, @error_messages);
 
     #Mark the messages as sent
     for my $uid (@sent_uids) {
-	$dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+        eval {
+            $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+        };
+        if ($@) {
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid");
+        }
     }
 }
 
@@ -133,7 +154,12 @@ sub checkOutgoing {
 
     #Mark the messages as sent
     for my $uid (@sent_uids) {
-	$dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+        eval {
+            $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+        };
+        if ($@) {
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid");
+        }
     }
 }
 
@@ -144,10 +170,11 @@ sub mailAdmin {
     my %message = (
 	mail => "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n",
 	address => $conf{admin_address},
+        uid => 'mailadmin',
 	);
 
     #Send the message:
-    my @sent_uids = &sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
+    my @sent_uids = sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
 
     #Log any errors:
     $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
@@ -174,6 +201,23 @@ sub quit {
 
     #Exit
     exit 0;
+}
+
+sub archiveMessages {
+    my $archive = $dbh->prepare("INSERT INTO Archive VALUE(?,?,?,?,?,?,?)");
+    my $archive_time = fromEpoch(time);
+    my $messages_ref = $dbh->selectall_arrayref("SELECT * FROM Messages WHERE sent_time < $archive_time");
+    my @messages = @{ $messages_ref };
+    for my $message (@messages) {
+        my $uid = $message->[0];
+        my $raw_mail = $dbh->selectrow_array("SELECT mail FROM RawMail WHERE uid = '$uid'");
+        my $parsed_mail = $dbh->selectrow_array("SELECT mail FROM ParsedMail WHERE uid = '$uid'");
+        $archive->execute(@{ $message }, $raw_mail, $parsed_mail);
+        $dbh->do("DELETE FROM Messages WHERE uid = '$uid'");
+    }
+    my $delete_time = fromEpoch(time - 7 * 24 * 60 * 60);
+    $dbh->do("DELETE FROM Archive WHERE sent_time < $delete_time");
+    #TODO: database maintainance
 }
 
 1;

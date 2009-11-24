@@ -1,11 +1,10 @@
 #!/usr/bin/perl
 
+#pragmas
 use 5.010;
-
 use strict;
 use warnings;
 
-use Log::Log4perl;
 use Proc::Daemon;
 
 use Mod::TieSTDERR;
@@ -15,7 +14,7 @@ use Mod::Crypt;
 use Mod::Talaria;
 
 #Determine mode:
-die "Usage: $0 (incoming|outgoing)\n" unless (scalar @ARGV == 1);
+die "Usage: $0 (incoming|outgoing|archive)\n" unless (scalar @ARGV == 1);
 
 my $mode = $ARGV[0];
 my $subroutine_ref;
@@ -23,9 +22,18 @@ my $subroutine_ref;
 given($mode) {
     when('incoming') {
 	$subroutine_ref = \&checkIncoming;
+
+        #Create temporary directory for MIME parser
+        my $tmp_dir = '/tmp/mimedump/';
+        if ( !(-d $tmp_dir) ) {
+            mkdir($tmp_dir, 0755) or die "Couldn't create $tmp_dir: $!";
+        }
     }
     when('outgoing') {
 	$subroutine_ref = \&checkOutgoing;
+    }
+    when('archive') {
+        $subroutine_ref = \&archiveMessages;
     }
     default {
 	die "Invalid mode: $mode\n";
@@ -37,7 +45,7 @@ my $cwd = $ENV{PWD};
 
 #Various conf variables:
 my $conf_file  = "$cwd/conf/talaria.conf";
-my $key_digest = "$cwd/conf/key_digest";
+my $key_digest = "$cwd/conf/key_digest.conf";
 my $pid_file   = "$cwd/talariad_$mode.pid";
 
 #Only one instance at a time, please:
@@ -61,7 +69,7 @@ my $logger_conf = <<"END_LOGGER_CONF";
 log4perl.rootLogger=INFO, LOG
 
 log4perl.appender.LOG=Log::Log4perl::Appender::File
-log4perl.appender.LOG.filename=$cwd/log/talaria_$mode.log
+log4perl.appender.LOG.filename=$cwd/log/talariad_$mode.log
 log4perl.appender.LOG.mode=write
 log4perl.appender.LOG.layout=PatternLayout
 log4perl.appender.LOG.layout.ConversionPattern=[\%d{DATE}] \%C: \%p: \%m \%n
@@ -98,18 +106,21 @@ $SIG{INT}  = sub { &quit('SIGINT' , $pid_file) };
 
 #Main loop:
 while (1) {
+    #Call subroutine
     eval {
 	&{ $subroutine_ref };
     };
-    $logger->error($@) if ($@);
+    if ($@) {
+        $logger->error($@);
+    }
 
-    #Wait:
+    #Wait
     sleep $conf{interval};
 }
 
 =head1 NAME
 
-talariad.pl
+talariad.pl -- a daemon which serves as the Talaria main program.
 
 =head1 USAGE
 
@@ -122,10 +133,6 @@ This is a daemon.
 =head1 DEPENDENCIES
 
 =over
-
-=item *
-
-Log::Log4perl
 
 =item *
 

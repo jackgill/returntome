@@ -9,9 +9,10 @@ use Exporter;
 
 use MIME::Lite;
 use DateTime;
+use Email::Simple;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(createMessages populateDB);
+our @EXPORT = qw(getHeader createMessages populateDB);
 
 sub createMessages {
     my ($nMessages, $nMinutes, $to) = @_;
@@ -111,6 +112,18 @@ sub populateDB {
     $store_raw->execute('8','maiiiiil',$key);
 }
 
+sub getHeader {
+    my ($text, $header_name)  = @_;
+
+    #Parse the mail:
+    my $email = Email::Simple->new( $text );
+
+    #Get header value:
+    my $header_value = $email->header( $header_name );
+
+    return $header_value;
+}
+
 1;
 
 =head1 NAME
@@ -128,6 +141,36 @@ A collection of routines used for testing.
 =head1 SUBROUTINES
 
 =over
+
+=item *
+
+B<getHeader>
+
+Extract the specified header from the given email.
+
+I<Arguments:>
+
+=over
+
+=item *
+
+mail
+
+=item *
+
+header name
+
+=back
+
+I<Returns:>
+
+=over
+
+=item *
+
+the content of the header
+
+=back
 
 =item *
 

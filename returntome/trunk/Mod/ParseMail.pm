@@ -1,64 +1,45 @@
 package Mod::ParseMail;
 
+#pragmas
+use 5.010;
 use warnings;
 use strict;
+use bytes;
 
+#modules
 use Exporter;
-
 use Log::Log4perl;
 use MIME::Parser;
 use File::Path;
-use Mod::Ad;
-use Switch;
-use bytes;
-use Carp;
-use File::Path;
+use Date::Manip;
+use DateTime;
 
-our @ISA = ("Exporter");
-our @EXPORT = qw(getHeader parseMail parseInstructions fromEpoch);
+use Mod::Ad;
+
+our @ISA = qw(Exporter);
+our @EXPORT = qw(parseMail parseInstructions fromEpoch);
 
 my $logger = Log::Log4perl->get_logger();
 
-use Email::Simple;
-
-sub getHeader {
-    my ($text, $header_name)  = @_;
-
-    #Parse the mail:
-    my $email = Email::Simple->new( $text );
-
-    #Get header value:
-    my $header_value = $email->header( $header_name );
-
-    return $header_value;
-}
-
 sub parseMail {
-    my ($raw_mail, $from_address) = @_;
+    my ($raw_mail, $from_address, $uid) = @_;
+
+    my $tmp_dir = '/tmp/mimedump/';
 
     #Create the parser:
     my $parser = new MIME::Parser;
-
-    #Set up the temporary directory the parser will write to:
-    my $tmp_dir = '/tmp/mimedump/';
-
-    if ( !(-d $tmp_dir) ) { #if the temp dir doesn't exits, create it
-        mkdir($tmp_dir, 0755) or die "Couldn't create $tmp_dir: $!"; #TODO: this directory should be permanent
-    }
-    else {                  #if it does, empty it
-        rmtree( $tmp_dir, {keep_root => 1} );
-    }
-
-    #Set parser to write to temporary directory:
     $parser->output_dir($tmp_dir);
+
+    #Clean out temporary directory
+    rmtree( $tmp_dir, {keep_root => 1} );
 
     #parse the mail:
     my $entity = $parser->parse_data( $raw_mail );
 
     #Check the parser for errors:
-    my $results  = $parser->results;
-    my @msgs = $results->msgs;
-    $logger->error("Parser Error: $_") for (@msgs);
+    for my $error ($parser->results->msgs) {
+        $logger->error("MIME parser error for message $uid:\n$error");
+    }
 
     #get the headers:
     my $head = $entity->head;
@@ -90,9 +71,8 @@ sub parseMail {
             }
 	}
 
-        #TODO: rewrite using given-when?
-	switch($entity->effective_type) {
-	    case 'multipart/mixed' { #there are attachments
+	given($entity->effective_type) {
+	    when('multipart/mixed') { #there are attachments
 	      PARTS:
 		for my $part ($entity->parts) {
 		    if ($part->effective_type eq 'multipart/alternative') {
@@ -109,24 +89,24 @@ sub parseMail {
 		    }
 		}
 	    }
-	    case 'multipart/alternative' { #text/plain and text/html only
+	    when('multipart/alternative') { #text/plain and text/html only
 		for my $part ($entity->parts) {
 		    $text_plain = $part if ($part->effective_type eq 'text/plain');
 		    $text_html  = $part if ($part->effective_type eq 'text/html');
 		}
 	    }
-	    case 'text/plain' { #text/plain only
+	    when('text/plain') { #text/plain only
 		$text_plain = $entity;
 	    }
 	}
     }
-    else {#Message is not MIME formatted
+    else { #Message is not MIME formatted
 	$text_plain = $entity;
     }
 
     #Process text/plain and text/html parts:
-    my @plain_lines = &readEntity($text_plain);
-    my @html_lines = &readEntity($text_html) if $text_html;
+    my @plain_lines = readEntity($text_plain);
+    my @html_lines = readEntity($text_html) if $text_html;
 
     my $error_message;
     my $return_time;
@@ -140,30 +120,33 @@ sub parseMail {
 	}
     }
 
-    if  ($instructions) { #instructions were found
-	$return_time = &parseInstructions($instructions);
+    if ($instructions) { #instructions were found
+        #Get return time
+	$return_time = parseInstructions($instructions);
 
-	if ($return_time) {#instructions parsing succeeded
-	    #Check for return dates in the past:
+	if ($return_time) { #instructions parsing succeeded
+	    #Check for return dates in the past
             if ($return_time lt fromEpoch(time)) {
                 $error_message = "You specified a return date in the past.";
             }
 
-	    #Check for return dates too far in the future:
+	    #Check for return dates too far in the future
             if ($return_time gt fromEpoch(time + 60 * 60 * 24 * 365)) {
                 $error_message = "Sorry, we do not accept messages with a return date more than a year in the future.";
             }
 	}
-        else {#instructions parsing failed
+        else { #instructions parsing failed
 	    $error_message = "Sorry, we could not understand these instructions.";
 	}
     }
-    else {#instructions were not found, add an error message:
+    else { #instructions were not found
         $error_message = "Sorry, we could not find instructions in this message.";
     }
 
     #Check message size:
-    $error_message = "Sorry, your message size must be less than 8 MB." if (length($raw_mail) > 8e6);
+    if (length($raw_mail) > 8e6) {
+        $error_message = "Sorry, your message size must be less than 8 MB.";
+    }
 
     #Add an error message or an ad to the message as appropriate:
     if ($error_message) {
@@ -180,15 +163,14 @@ sub parseMail {
     #TODO: check return value on above
 
     #Add the parsed MIME entity to the mail
-    $parsed_mail .= "\n" . join('',@{ $entity->body });
-
-    chomp $from;
+    $parsed_mail .= "\n" . join('', @{ $entity->body } );
 
     #assemble the message
     my %message = (
 	mail => $parsed_mail,
 	return_time => $return_time,
-	address => $from,
+	address => chomp $from,
+        uid => $uid,
 	);
 
     return \%message;
@@ -253,9 +235,6 @@ sub writeEntity {
     return 1;
 }
 
-
-use Date::Manip;
-
 sub parseInstructions {
     my $instructions = shift;
 
@@ -267,9 +246,6 @@ sub parseInstructions {
 
     return $date;
 }
-
-
-use DateTime;
 
 sub fromEpoch {
     my $epoch = shift;
@@ -285,11 +261,11 @@ sub fromEpoch {
 
 =head1 NAME
 
-Mod::ParseMail
+Mod::ParseMail -- parses emails.
 
 =head1 SYNOPSIS
 
-C<my %message = %{ &parseMail($raw_message, $from) };>
+C<my %message = %{ &parseMail($raw_message, $from, $uid) };>
 
 =head1 DESCRIPTION
 
@@ -298,36 +274,6 @@ Parses emails.
 =head1 SUBROUTINES
 
 =over
-
-=item *
-
-B<getHeader>
-
-Extract the specified header from the given email.
-
-I<Arguments:>
-
-=over
-
-=item *
-
-mail
-
-=item *
-
-header name
-
-=back
-
-I<Returns:>
-
-=over
-
-=item *
-
-the content of the header
-
-=back
 
 =item *
 
@@ -362,6 +308,7 @@ The message looks like:
     mail => $mail,
     return_time => $return_time,
     address => $from,
+    uid => $uid,
     );
 
 =back
@@ -492,14 +439,6 @@ File::Path
 
 =item *
 
-Mod::Ad
-
-=item *
-
-Switch
-
-=item *
-
 bytes
 
 =item *
@@ -508,14 +447,14 @@ File::Path
 
 =item *
 
-Email::Simple
-
-=item *
-
 Date::Manip
 
 =item *
 
 DateTime
+
+=item *
+
+Mod::Ad
 
 =back
