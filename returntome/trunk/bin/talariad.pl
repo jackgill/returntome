@@ -99,10 +99,10 @@ setConf(\%conf);
 connectDB();
 
 #Set up signal handlers:
-$SIG{HUP}  = sub { &quit('SIGHUP' , $pid_file) };
-$SIG{QUIT} = sub { &quit('SIGQUIT', $pid_file) };
-$SIG{TERM} = sub { &quit('SIGTERM', $pid_file) };
-$SIG{INT}  = sub { &quit('SIGINT' , $pid_file) };
+$SIG{HUP}  = sub { quit('SIGHUP' , $pid_file) };
+$SIG{QUIT} = sub { quit('SIGQUIT', $pid_file) };
+$SIG{TERM} = sub { quit('SIGTERM', $pid_file) };
+$SIG{INT}  = sub { quit('SIGINT' , $pid_file) };
 
 #Main loop:
 while (1) {

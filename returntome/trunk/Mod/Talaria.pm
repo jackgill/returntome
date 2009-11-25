@@ -32,7 +32,7 @@ sub connectDB {
         "DBI:mysql:database=$conf{db_server}",
         $conf{db_user},
         $conf{db_pass},
-        {PrintError => 0, RaiseError => 1}
+        {PrintError => 1, RaiseError => 1}
     );
 }
 
@@ -43,7 +43,7 @@ sub disconnectDB {
 sub checkIncoming {
 
     #Check for new messages:
-    my @mail = &getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
+    my @mail = getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
 
     my @error_messages; #messages we are going to return immediately
 
@@ -69,7 +69,7 @@ sub checkIncoming {
         #If UID wasn't created, log it
         if ($@) {
             $logger->error("Couldn't create UID. Message follows.");
-            my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
+            my $encrypted_mail = encrypt($conf{db_key}, $raw_mail);
             $logger->error($encrypted_mail);
             next MAIL;
         };
@@ -111,15 +111,23 @@ sub checkIncoming {
         #If parsed mail wasn't stored, log it
 	if ($@) {
             $logger->error("Failed to store message $uid in ParsedMail");
-	    $encrypted_mail = &encrypt($conf{db_key}, $parsed_mail);
+	    my $encrypted_mail = encrypt($conf{db_key}, $parsed_mail);
 	    $logger->error($encrypted_mail);
             next MAIL;
 	}
 
+        #Try to store address
+        eval {
+            $dbh->do("UPDATE Messages SET address = '$address' WHERE uid = '$uid'");
+        };
+        if ($@) {
+            $logger->error("Failed to store address $address for message $uid");
+        }
+
 	#If there we got a return time, store it.
 	if (defined $return_time) {
             eval {
-                $dbh->do("UPDATE Messages SET return_time = $return_time WHERE uid = '$uid'");
+                $dbh->do("UPDATE Messages SET return_time = '$return_time' WHERE uid = '$uid'");
             };
             if ($@) {
                 $logger->error("Failed to store return time $return_time for message $uid");

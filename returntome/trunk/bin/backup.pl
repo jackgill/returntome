@@ -93,6 +93,7 @@ $smtp->quit;
 
 unlink $tarball;
 
+print "Backup successful.\n";
 __END__
 
 =head1 NAME

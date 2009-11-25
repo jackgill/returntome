@@ -6,7 +6,7 @@ use strict;
 use Exporter;
 use Net::SMTP::SSL;
 use Log::Log4perl;
-
+use Data::Dumper::Simple;
 our @ISA = ("Exporter");
 our @EXPORT = qw(sendMessages);
 
@@ -39,7 +39,7 @@ sub sendMessages {
     #Send the messages
     for my $message (@messages) {
 
-	my $address = $message->{address};
+        my $address = $message->{address};
 	my $mail = $message->{mail};
 	my $uid = $message->{uid};
 	$uid = '(NO UID)' unless $uid;

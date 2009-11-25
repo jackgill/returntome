@@ -5,7 +5,7 @@ use strict;
 use warnings;
 
 use Test::More tests => 5;
-
+use Data::Dumper::Simple;
 #TODO: deal with parser errors in log?
 #TODO: right now this only checks that the instructions are parsed. Check for error messages, ads, correctly re-assembled messages?
 BEGIN {
@@ -24,6 +24,7 @@ for my $test (@tests) {
     close $in;
 
     my $message = parseMail($mail,'return.to.me.test@gmail.com', sprintf("%09d",$uid));
+    print Dumper($message);
     is( $message->{return_time}, '2009-11-22 00:00:00',$test);
 
     $uid++;

@@ -165,11 +165,13 @@ sub parseMail {
     #Add the parsed MIME entity to the mail
     $parsed_mail .= "\n" . join('', @{ $entity->body } );
 
+    chomp $from;
+    
     #assemble the message
     my %message = (
 	mail => $parsed_mail,
 	return_time => $return_time,
-	address => chomp $from,
+	address => $from,
         uid => $uid,
 	);
 
