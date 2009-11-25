@@ -32,7 +32,7 @@ sub connectDB {
         "DBI:mysql:database=$conf{db_server}",
         $conf{db_user},
         $conf{db_pass},
-        {PrintError => 1, RaiseError => 1}
+        {PrintError => 0, RaiseError => 1}
     );
 }
 
@@ -214,7 +214,7 @@ sub quit {
 sub archiveMessages {
     my $archive = $dbh->prepare("INSERT INTO Archive VALUE(?,?,?,?,?,?,?)");
     my $archive_time = fromEpoch(time);
-    my $messages_ref = $dbh->selectall_arrayref("SELECT * FROM Messages WHERE sent_time < $archive_time");
+    my $messages_ref = $dbh->selectall_arrayref("SELECT * FROM Messages WHERE sent_time < '$archive_time'");
     my @messages = @{ $messages_ref };
     for my $message (@messages) {
         my $uid = $message->[0];
@@ -224,7 +224,7 @@ sub archiveMessages {
         $dbh->do("DELETE FROM Messages WHERE uid = '$uid'");
     }
     my $delete_time = fromEpoch(time - 7 * 24 * 60 * 60);
-    $dbh->do("DELETE FROM Archive WHERE sent_time < $delete_time");
+    $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
     #TODO: database maintainance
 }
 

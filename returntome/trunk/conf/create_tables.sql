@@ -1,15 +1,15 @@
---On the command line:
+-- On the command line:
 -- mysql -u root -p ReturnToMe < conf/create_tables.sql
 
---To reset DB:
---TRUNCATE TABLE Messages;
+-- To reset DB:
+-- TRUNCATE TABLE Messages;
 
---Drop tables:
+-- Drop tables:
 DROP TABLE IF EXISTS RawMail;
 DROP TABLE IF EXISTS ParsedMail;
 DROP TABLE IF EXISTS Messages;
 
---Create tables:
+-- Create tables:
 CREATE TABLE Messages 
 (
        uid INTEGER(9) ZEROFILL NOT NULL AUTO_INCREMENT,  

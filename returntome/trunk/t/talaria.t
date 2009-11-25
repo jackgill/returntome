@@ -13,11 +13,24 @@ use Mod::Test;
 use Data::Dumper::Simple;
 use Date::Manip;
 use Test::More tests => 4;
+use DBI;
 
 #TestTalaria.pl
 #Send a set of test messages to the Talaria program
 #Wait for their return
 #Check that they were returned at the correct time
+
+#Clear DB
+my $dbh = DBI->connect(
+        "DBI:mysql:database=ReturnToMe",
+        'root',
+        'foo',
+        {PrintError => 0, RaiseError => 1}
+    );
+
+$dbh->do('TRUNCATE TABLE Messages');
+
+$dbh->disconnect();
 
 #Start talaria:
 open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
@@ -29,7 +42,7 @@ system 'bin/talariad.pl outgoing';
 close STDIN;
 
 #Set up logging:
-Log::Log4perl::init('conf/log4perl_test.conf');
+#Log::Log4perl::init('conf/log4perl_test.conf');
 
 #Read the config file:
 my %conf = %{ getConf('conf/test.conf','foo') };
