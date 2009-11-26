@@ -26,7 +26,7 @@ given($mode) {
         #Create temporary directory for MIME parser
         my $tmp_dir = '/tmp/mimedump/';
         if ( !(-d $tmp_dir) ) {
-            mkdir($tmp_dir, 0755) or die "Couldn't create $tmp_dir: $!";
+            mkdir($tmp_dir, 0700) or die "Couldn't create $tmp_dir: $!";
         }
     }
     when('outgoing') {

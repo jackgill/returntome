@@ -158,15 +158,15 @@ sub parseMail {
     }
 
     #Write the modified message:
-    &writeEntity($text_plain,\@plain_lines);
-    &writeEntity($text_html,\@html_lines) if $text_html;
+    writeEntity($text_plain,\@plain_lines);
+    writeEntity($text_html,\@html_lines) if $text_html;
     #TODO: check return value on above
 
     #Add the parsed MIME entity to the mail
     $parsed_mail .= "\n" . join('', @{ $entity->body } );
 
     chomp $from;
-    
+
     #assemble the message
     my %message = (
 	mail => $parsed_mail,
@@ -184,7 +184,7 @@ sub readEntity {
 
     my $bh = $entity->bodyhandle;
 
-    my @lines; 
+    my @lines;
 
     #Open body handle for reading:
     my $io = $bh->open("r");
@@ -399,7 +399,7 @@ Either a time in epoch seconds or undef.
 
 B<fromEpoch>
 
-Given a time in epoch seconds, return a formatted string representing that time. For safety, the call to DateTime is wrapped in an eval block.
+Given a time in epoch seconds, return a formatted string representing that time.
 
 I<Arguments:>
 

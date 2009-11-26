@@ -17,7 +17,7 @@ my $key = getCheckedKey($digest);
 
 #Decrypt the file:
 open(my $in , '<', $file            ) or die "Couldn't open $file: $!\n";
-open(my $out, '>', $file . 'decrypt') or die "Couldn't open $file.decrypt: $!\n";
+open(my $out, '>', $file . '.decrypt') or die "Couldn't open $file.decrypt: $!\n";
 
 my @slurp = <$in>;
 my $cipher_text = join("", @slurp);

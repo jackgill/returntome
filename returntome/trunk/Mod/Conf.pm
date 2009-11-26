@@ -23,10 +23,10 @@ sub getConf {
     my $cipher_text = join("", @slurp);
 
     #Decrypt the conf file:
-    my $plain_text = &decrypt($key, $cipher_text);
+    my $plain_text = decrypt($key, $cipher_text);
 
     #Determine if decryption was successful:
-    die "Error: failed to decrypt conf file.\n" unless($plain_text =~ /[\w\s]{10,}/);
+    return {} unless($plain_text =~ /[\w\s]{10,}/);
 
     #Read the conf file:
     my @file = split("\n",$plain_text);
@@ -60,7 +60,7 @@ admin_address
 
 =head1 NAME
 
-Mod::Conf
+Mod::Conf -- Read an encrypted configuration file.
 
 =head1 SYNOPSIS
 
@@ -98,7 +98,7 @@ I<Returns:>
 
 =item *
 
-A reference to hash containing the key,value pairs from the file.
+A reference to hash containing the key,value pairs from the file. Returns a reference to an empty hash if decryption failed.
 
 =back
 

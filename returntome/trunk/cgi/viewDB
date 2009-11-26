@@ -9,14 +9,8 @@ use CGI qw(:standard *table); #function based interface to CGI module, start_tab
 use CGI::Carp qw(fatalsToBrowser); #send errors to browser as well as server error log
 
 use lib '..';
-use Mod::DB;
 use Mod::Conf;
 use Mod::Crypt;
-
-#TODO: set up logger
-
-#Get the list of table names:
-my @tables = keys %{ &getSchemas };
 
 #Make the webpage:
 print header, start_html('Return To Me');
@@ -24,15 +18,12 @@ print header, start_html('Return To Me');
 #Make the banner:
 print h1("Return To Me"),
     br(),
-    h4('"If you want a professional looking website, go hire a web designer." -- corporate motto'),
+    h4('Admin view of database'),
     br();
 
 #Make the form:
 print start_form,
-    "Table: ",
-    popup_menu(-name=>'table', -values => [@tables,'All']),
-    br,
-    "Password: ",
+    "Decryption key: ",
     password_field('key','',10,10),
     br,
     submit,
@@ -41,68 +32,68 @@ print start_form,
 #Handle form submission:
 if (param) {
     my $key = param('key');
-    if (param('table') eq 'All') {
-	for (@tables) {
-	    &displayTable($_,$key);
-	}
-    } else {	    
-	&displayTable(param('table'),$key);
-    }
+    displayTable($key);
 }
 
 print end_html();
 
 
 sub displayTable {
-    my $table_name = shift;
     my $key = shift;
 
     #Read conf file:
-    my $conf_file = "../conf/cli.conf";
-    my %conf = %{ &getCipherConf($conf_file,$key) };
-    die "Failed to decrypt $conf_file" unless %conf;
-    #Check that conf variables are defined:
-    my @conf_vars = qw(db_server db_user db_pass);
-    for (@conf_vars) {
-	unless (defined $conf{$_}) {
-	    die "Configuration error: $conf_file does not define $_\n";
-	}
-    }
-    
-    #Connect to DB:
-    &Mod::DB::connect("mysql:database=" . $conf{db_server},$conf{db_user},$conf{db_pass});
-    my @table = @{ &getTable($table_name) };
+    my $conf_file = '../conf/talaria.conf';
+    my %conf = %{ getConf($conf_file, $key) };
 
-    #set up the table:
+    unless (%conf) {
+        print h4('Invalid decryption key.');
+        return;
+    }
+
+    #Connect to DB:
+    my $dbh = DBI->connect(
+        "DBI:mysql:database=$conf{db_server}",
+        $conf{db_user},
+        $conf{db_pass},
+        {PrintError => 0, RaiseError => 1}
+    );
+
+    my $table_ref = $dbh->selectall_arrayref("SELECT Messages.uid, Messages.address, Messages.received_time, Messages.return_time, Messages.sent_time, AES_DECRYPT(RawMail.mail, '$conf{db_key}'), AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') FROM Messages INNER JOIN ParsedMail INNER JOIN RawMail WHERE Messages.uid = ParsedMail.uid AND Messages.uid = RawMail.uid");
+    print_table($table_ref,'Active Messages');
+
+    $table_ref = $dbh->selectall_arrayref("SELECT uid, address, received_time, return_time, sent_time, AES_DECRYPT(raw_mail, '$conf{db_key}'), AES_DECRYPT(parsed_mail, '$conf{db_key}') FROM Archive");
+    print_table($table_ref,'Archive');
+
+    $dbh->disconnect();
+}
+
+sub print_table {
+    my $table_ref = shift;
+    my $table_name = shift;
+
     print start_table({-border=>1});
-    print caption("$table_name");
-    my $col_names =shift @table;
+    print caption( h4($table_name) );
+    my $col_names = ['UID','Address','Received Time','Return Time','Sent Time','Raw Mail','Parsed Mail'];
     print Tr( th( $col_names ) );
-    for (@table) {
-	my @row_array = @$_;
+    for my $row (@{ $table_ref }) {
 	print "<tr>";
-	
-	my $nColumns = @row_array;
-	my $i = 0;
-	for (@row_array) {
+	for (my $i = 0; $i < 7; $i++) {
 	    print "<td>";
-	    
-	    if ($i == $nColumns - 1 && $table_name ne 'UID') { #KLUDGE: Assume last column is mail. Unless it's the UID table.
-		print '<div style="overflow:auto; height:200px;width:600px;">';
-	    $_ = &decrypt($key,$_);
-		print pre($_);
+            if ($i > 4) {
+		print '<div style="overflow:auto; height:200px;width:400px;">';
+		print pre( escapeHTML( $row->[$i] ) );
 		print "</div>";
 	    } else {
-		print;
+                if ($row->[$i]) {
+                    print $row->[$i];
+                }
+                else {
+                    print 'NONE';
+                }
 	    }
 	    print "</td>";
-	    $i++;
 	}
 	print "</tr>";
     }
-    
     print end_table;
-    &Mod::DB::disconnect;
 }
-
-

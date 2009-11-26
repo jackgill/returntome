@@ -5,7 +5,7 @@ use 5.010;
 use strict;
 use warnings;
 
-use Test::More tests => 7;
+use Test::More tests => 8;
 use DBI;
 
 use Mod::Test;
@@ -27,24 +27,23 @@ $dbh->do('TRUNCATE TABLE Messages');
 $dbh->do('TRUNCATE TABLE Archive');
 
 #insert test messages
-$dbh->do("INSERT INTO Messages VALUES(NULL,'foo\@bar.com',NOW(),NULL, NULL)");
-$dbh->do("INSERT INTO RawMail VALUES(1,'this is some raw mail')");
-$dbh->do("INSERT INTO ParsedMail VALUES(1,'this is some parsed mail')");
+my $Messages = $dbh->prepare("INSERT INTO Messages VALUES(NULL, 'foo\@bar.com', ?, ? ,?)");
+my $RawMail = $dbh->prepare("INSERT INTO RawMail VALUES(?,AES_ENCRYPT('this is some raw mail','foo'))");
+my $ParsedMail = $dbh->prepare("INSERT INTO ParsedMail VALUES(?,AES_ENCRYPT('this is some parsed mail','foo'))");
+my $Archive = $dbh->prepare("INSERT INTO Archive VALUES(?,'foo\@bar.com',NOW(),NULL,?,AES_ENCRYPT('this is some raw mail','foo'),AES_ENCRYPT('this is some parsed mail','foo'))");
 
-$dbh->do("INSERT INTO Messages VALUES(NULL,'foo\@bar.com',NOW(),NULL, NULL)");
-$dbh->do("INSERT INTO RawMail VALUES(2,'this is some raw mail')");
-$dbh->do("INSERT INTO ParsedMail VALUES(2,'this is some parsed mail')");
+$Messages->execute(fromEpoch(time - 24 * 60 * 60 - 60), undef,undef);
+$Messages->execute(fromEpoch(time - 300), undef,undef);
+$Messages->execute(fromEpoch(time - 500), undef,fromEpoch(time - 60));
+$Messages->execute(fromEpoch(time - 24 * 60 * 60 + 60), undef,fromEpoch(time - 90));
 
-$dbh->do("INSERT INTO Messages VALUES(NULL,'foo\@bar.com',NOW(),NULL, '" . fromEpoch(time - 60) . "')");
-$dbh->do("INSERT INTO RawMail VALUES(3,'this is some raw mail')");
-$dbh->do("INSERT INTO ParsedMail VALUES(3,'this is some parsed mail')");
+for (my $i = 1; $i < 5; $i++) {
+    $RawMail->execute($i);
+    $ParsedMail->execute($i);
+}
 
-$dbh->do("INSERT INTO Messages VALUES(NULL,'foo\@bar.com',NOW(),NULL, '" . fromEpoch(time - 60) . "')");
-$dbh->do("INSERT INTO RawMail VALUES(4,'this is some raw mail')");
-$dbh->do("INSERT INTO ParsedMail VALUES(4,'this is some parsed mail')");
-
-$dbh->do("INSERT INTO Archive VALUES(5,'foo\@bar.com',NOW(),NULL,'" . fromEpoch(time - 7 *24 * 60 * 60 - 60) . "','this is some raw mail','this is some parsed mail')");
-$dbh->do("INSERT INTO Archive VALUES(6,'foo\@bar.com',NOW(),NULL,'" . fromEpoch(time - 7 *24 * 60 * 60 - 60) . "','this is some raw mail','this is some parsed mail')");
+$Archive->execute(6, fromEpoch(time - 7 *24 * 60 * 60 - 60) );
+$Archive->execute(7, fromEpoch(time - 7 *24 * 60 * 60 + 60) );
 
 #Start talaria
 open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
@@ -60,23 +59,22 @@ close $in;
 
 system "kill -s SIGINT $pid_archive";
 
-my $uids_ref = $dbh->selectall_arrayref("SELECT uid FROM Messages");
-my $i = 1;
-my @rows = @{ $uids_ref };
-is(scalar @rows, 2,"Correct number of messages in Messages");
-for my $row (@rows) {
-   my $uid = $row->[0];
-   ok($uid == $i,"Message $uid still in Messages");
-   $i++;
+my $message_ref = $dbh->selectall_arrayref("SELECT uid FROM Messages");
+my @message_rows = @{ $message_ref };
+my @message_uids = qw(1 2);
+is(scalar @message_rows, 2,"Correct number of messages in Messages");
+for (my $i = 0; $i < 2; $i++) {
+    ok($message_rows[$i]->[0] == $message_uids[$i],"Message $message_uids[$i-1] is in Messages");
 }
 
-$uids_ref = $dbh->selectall_arrayref("SELECT uid FROM Archive");
-@rows = @{ $uids_ref };
-is(scalar @rows, 2,"Correct number of messages in Archive");
-for my $row (@rows) {
-   my $uid = $row->[0];
-   ok($uid == $i,"Message $uid in Archive");
-   $i++
+
+my $archive_ref = $dbh->selectall_arrayref("SELECT uid FROM Archive");
+my @archive_rows = @{ $archive_ref };
+my @archive_uids = qw(3 4 7);
+is(scalar @archive_rows, 3,"Correct number of messages in Archive");
+for (my $i = 0; $i < 3; $i++) {
+    ok($archive_rows[$i]->[0] == $archive_uids[$i],"Message $archive_uids[$i] is in Archive");
 }
+
 $dbh->disconnect();
 

@@ -5,9 +5,10 @@ use 5.010;
 use strict;
 use warnings;
 
-use Test::More tests => 14;
+use Test::More tests => 15;
 use DateTime;
 
+#1
 BEGIN {
     use_ok('Mod::ParseMail');
 }
@@ -15,6 +16,7 @@ BEGIN {
 my @tests;
 my ($instructions, $time, $expected, $got, $dt);
 
+#2
 $instructions = 'Aug 19 2009';
 $expected = '2009-08-19 00:00:00';
 $got = parseInstructions($instructions);
@@ -24,6 +26,7 @@ push @tests, {
     got => $got,
 };
 
+#3
 $instructions = 'November 22nd, 2009';
 $expected = '2009-11-22 00:00:00';
 $got = parseInstructions($instructions);
@@ -33,6 +36,7 @@ push @tests, {
     got => $got,
 };
 
+#4
 $instructions = 'Aug 19, 2009';
 $expected = '2009-08-19 00:00:00';
 $got = parseInstructions($instructions);
@@ -42,6 +46,7 @@ push @tests, {
     got => $got,
 };
 
+#5
 $instructions = '19 August 2009';
 $expected = '2009-08-19 00:00:00';
 $got = parseInstructions($instructions);
@@ -51,6 +56,7 @@ push @tests, {
     got => $got,
 };
 
+#6
 $instructions = '8/19/09';
 $expected = '2009-08-19 00:00:00';
 $got = parseInstructions($instructions);
@@ -60,6 +66,7 @@ push @tests, {
     got => $got,
 };
 
+#7
 $instructions = 'tomorrow';
 $expected = fromEpoch(time + 24 * 60 *60);
 $got = parseInstructions($instructions);
@@ -69,6 +76,7 @@ push @tests, {
     got => $got,
 };
 
+#8
 $instructions = 'today 11:59pm';
 $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
 $expected = $dt->ymd . ' 23:59:00';
@@ -79,6 +87,7 @@ push @tests, {
     got => $got,
 };
 
+#9
 $instructions = 'today 3pm';
 $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
 $expected = $dt->ymd . ' 15:00:00';
@@ -89,6 +98,7 @@ push @tests, {
     got => $got,
 };
 
+#10
 $instructions = 'today 8:00';
 $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
 $expected = $dt->ymd . ' 08:00:00';
@@ -99,6 +109,7 @@ push @tests, {
     got => $got,
 };
 
+#11
 $instructions = '5 am';
 $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
 $expected = $dt->ymd . ' 05:00:00';
@@ -109,6 +120,7 @@ push @tests, {
     got => $got,
 };
 
+#12
 $instructions = 'next week';
 $dt = DateTime->from_epoch( epoch => time , time_zone => 'America/Denver');
 #$expected = fromEpoch(time + 7 * 24 * 60 * 60);

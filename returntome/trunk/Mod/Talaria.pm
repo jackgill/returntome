@@ -172,17 +172,18 @@ sub checkOutgoing {
 }
 
 sub mailAdmin {
+    my $subject = shift;
     my $text = shift;
 
     #Create the message:
     my %message = (
-	mail => "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: Talaria Alert\n\n$text\n\n",
+	mail => "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: $subject\n\n$text\n\n",
 	address => $conf{admin_address},
         uid => 'mailadmin',
 	);
 
     #Send the message:
-    my @sent_uids = sendMail(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
 
     #Log any errors:
     $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
@@ -197,11 +198,11 @@ sub quit {
     $logger->info('Talaria daemon exiting.');
 
     #Disconnect from database
-    &disconnectDB;
+    disconnectDB();
 
     #Mail the admin a notification
     unless ($signal eq 'SIGINT') { #SIGINT is used for normal shutdown
-	&mailAdmin("talariad went down at " . &now . " due to $signal.");
+	mailAdmin('talariad alert',"talariad went down at " . fromEpoch(time) . " due to $signal.");
     }
 
     #Remove PID file
@@ -212,19 +213,30 @@ sub quit {
 }
 
 sub archiveMessages {
+    my $received = $dbh->selectrow_array("SELECT COUNT(*) FROM Messages WHERE received_time > '" . fromEpoch(time - 24*60*60) . "'");
+    my $sent = $dbh->selectrow_array("SELECT COUNT(*) FROM Messages WHERE sent_time > '" . fromEpoch(time - 24*60*60) . "'");
     my $archive = $dbh->prepare("INSERT INTO Archive VALUE(?,?,?,?,?,?,?)");
     my $archive_time = fromEpoch(time);
-    my $messages_ref = $dbh->selectall_arrayref("SELECT * FROM Messages WHERE sent_time < '$archive_time'");
+    my $messages_ref = $dbh->selectall_arrayref("SELECT Messages.uid, address, received_time, return_time, sent_time,RawMail.mail, ParsedMail.mail FROM Messages INNER JOIN ParsedMail INNER JOIN RawMail WHERE Messages.uid = ParsedMail.uid AND Messages.uid = RawMail.uid AND Messages.sent_time < '$archive_time'");
     my @messages = @{ $messages_ref };
+    my $archived = scalar @messages;
     for my $message (@messages) {
-        my $uid = $message->[0];
-        my $raw_mail = $dbh->selectrow_array("SELECT mail FROM RawMail WHERE uid = '$uid'");
-        my $parsed_mail = $dbh->selectrow_array("SELECT mail FROM ParsedMail WHERE uid = '$uid'");
-        $archive->execute(@{ $message }, $raw_mail, $parsed_mail);
-        $dbh->do("DELETE FROM Messages WHERE uid = '$uid'");
+        $archive->execute(@{ $message });
+        $dbh->do("DELETE FROM Messages WHERE uid = '$message->[0]'");
     }
     my $delete_time = fromEpoch(time - 7 * 24 * 60 * 60);
-    $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
+    my $deleted = $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
+
+
+    my $report =<<"END_REPORT";
+In the last 24 hours,
+Messages Received: $received
+Messages Sent    : $sent
+Messages Archived: $archived
+Messages Deleted : $deleted
+END_REPORT
+
+    mailAdmin('Talaria report ' . fromEpoch(time),$report);
     #TODO: database maintainance
 }
 

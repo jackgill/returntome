@@ -17,7 +17,7 @@ my $key = &getCheckedKey($digest);
 
 #Encrypt the file:
 open(my $in , '<', $file) or die "Couldn't open $file: $!\n";
-open(my $out, '>', $file . 'crypt') or die "Couldn't open $file.crypt: $!\n";
+open(my $out, '>', $file . '.crypt') or die "Couldn't open $file.crypt: $!\n";
 
 my @slurp = <$in>;
 my $plain_text = join("", @slurp);

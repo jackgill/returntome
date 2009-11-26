@@ -20,32 +20,21 @@ use DBI;
 #Wait for their return
 #Check that they were returned at the correct time
 
+#Read the config file:
+my %conf = %{ getConf('conf/test.conf','foo') };
+
 #Clear DB
 my $dbh = DBI->connect(
-        "DBI:mysql:database=ReturnToMe",
-        'root',
-        'foo',
+        "DBI:mysql:database=$conf{db_server}",
+        $conf{db_user},
+        $conf{db_pass},
         {PrintError => 0, RaiseError => 1}
     );
-
 $dbh->do('TRUNCATE TABLE Messages');
 
 $dbh->disconnect();
 
-#Start talaria:
-open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
-system 'bin/talariad.pl incoming';
-close STDIN;
-
-open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
-system 'bin/talariad.pl outgoing';
-close STDIN;
-
-#Set up logging:
-#Log::Log4perl::init('conf/log4perl_test.conf');
-
-#Read the config file:
-my %conf = %{ getConf('conf/test.conf','foo') };
+startTalariad();
 
 #Clear inbox:
 getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
@@ -53,7 +42,7 @@ getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
 #Create mail:
 my $nMessages = 4;
 my $nMinutes = 2;
-my @messages = createMessages($nMessages,$nMinutes,'return.to.me.test@gmail.com');
+my @messages = createMessages($nMessages,$nMinutes,'return.to.me.beta@gmail.com');
 
 #Load the requested return times into a hash keyed by subject:
 my %requested;
@@ -117,14 +106,29 @@ for my $subject (sort keys %requested) {
 #Notify whoever's paying attention:
 system "aplay -q ~/beep-7.wav";
 
-#close talaria
-open(my $in,'<','talariad_incoming.pid') or die "Couldn't open talaria_incoming.pid: $!\n";
-my $pid_incoming = <$in>;
-close $in;
+stopTalariad();
 
-open($in,'<','talariad_outgoing.pid') or die "Couldn't open talaria_outgoing.pid: $!\n";
-my $pid_outgoing = <$in>;
-close $in;
+sub startTalariad {
+    open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
+    system 'bin/talariad.pl incoming';
+    close STDIN;
 
-system "kill -s SIGINT $pid_incoming";
-system "kill -s SIGINT $pid_outgoing";
+    open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
+    system 'bin/talariad.pl outgoing';
+    close STDIN;
+
+}
+
+sub stopTalariad {
+    open(my $in,'<','talariad_incoming.pid') or die "Couldn't open talaria_incoming.pid: $!\n";
+    my $pid_incoming = <$in>;
+    close $in;
+
+    open($in,'<','talariad_outgoing.pid') or die "Couldn't open talaria_outgoing.pid: $!\n";
+    my $pid_outgoing = <$in>;
+    close $in;
+
+    system "kill -s SIGINT $pid_incoming";
+    system "kill -s SIGINT $pid_outgoing";
+
+}
