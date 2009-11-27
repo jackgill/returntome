@@ -43,7 +43,7 @@ given($mode) {
 #get the CWD before we daemonize:
 my $cwd = $ENV{PWD};
 
-#Various conf variables:
+#conf variables:
 my $conf_file  = "$cwd/conf/talaria.conf";
 my $key_digest = "$cwd/conf/key_digest.conf";
 my $pid_file   = "$cwd/talariad_$mode.pid";
@@ -90,32 +90,87 @@ tie(*STDERR, 'Mod::TieSTDERR');
 tie(*STDOUT, 'Mod::TieSTDOUT');
 
 #Read conf file:
-my %conf = %{ getConf($conf_file, $key) };
-
-#Set conf vars:
-setConf(\%conf);
+my %conf = %{ readConf($conf_file, $key) };
 
 #Connect to DB:
 connectDB();
 
-#Set up signal handlers:
-$SIG{HUP}  = sub { quit('SIGHUP' , $pid_file) };
-$SIG{QUIT} = sub { quit('SIGQUIT', $pid_file) };
-$SIG{TERM} = sub { quit('SIGTERM', $pid_file) };
-$SIG{INT}  = sub { quit('SIGINT' , $pid_file) };
+my $working = 0; #flag indicating if subroutine is currently processing
+my $TERM = 0; #flag indicating if SIGTERM has been received
+
+#SIGTERM commands a graceful shutdown
+$SIG{TERM} = sub {
+    if ($working) { #subroutine is currently processing
+        $TERM = 1; #set flag, daemon will exit when subroutine finishes
+    } else { #daemon is sleeping
+        quit();
+    }
+};
+
+my $HUP = 0; #flag indicating if SIGHUP has been received
+
+#SIGHUP commands a re-read of the conf file
+$SIG{HUP}  = sub {
+    if ($working) {
+        $HUP = 1;
+    }
+    else {
+        %conf = %{ readConf($conf_file, $key) };
+     }
+};
 
 #Main loop:
 while (1) {
-    #Call subroutine
+    #Set flag to indicate subroutine processing
+    $working = 1;
+
+    #Execute subroutine
     eval {
 	&{ $subroutine_ref };
     };
+    #Log any errors
     if ($@) {
         $logger->error($@);
     }
 
-    #Wait
+    #clear flag to indicate subroutine processing
+    $working = 0;
+
+    #check to see if SIGTERM was received while subroutine was processing
+    if ($TERM) {
+        quit();
+    }
+    if ($HUP) {
+        readConf($conf_file, $key);
+    }
+
+    #wait
     sleep $conf{interval};
+}
+
+sub quit {
+    #Log the fact that we're quiting
+    $logger->info('Caught SIGTERM, exiting.');
+
+    #Disconnect from DB:
+    disconnectDB();
+
+    #Remove PID file
+    unlink($pid_file);
+
+    #Exit
+    exit 0;
+}
+
+sub readConf {
+    my ($conf_file, $key) = @_;
+
+    my $conf = getConf($conf_file, $key);
+
+    #Set conf vars:
+    setConf($conf);
+
+    return $conf;
 }
 
 =head1 NAME
@@ -124,11 +179,27 @@ talariad.pl -- a daemon which serves as the Talaria main program.
 
 =head1 USAGE
 
-C<bin/talariad.pl (incoming|outgoing)>
+C<bin/talariad.pl (incoming|outgoing|archive)>
 
 =head1 DESCRIPTION
 
-This is a daemon.
+This daemon runs an infinite loop which executes a subroutine specified by the mode, then sleeps for a number of seconds given in the config file. The available modes are:
+
+=over
+
+=item *
+
+B<incoming> - get messages from IMAP server, parse them, store them in the database.
+
+=item *
+
+B<outgoing> - retrieve messages from database, send them to SMTP server.
+
+=item *
+
+B<archive> - move sent messages from main tables to archive table, delete old archived messages.
+
+=back
 
 =head1 DEPENDENCIES
 

@@ -16,11 +16,11 @@ use Mod::SendMail;
 use Mod::Crypt;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(setConf connectDB disconnectDB checkIncoming checkOutgoing quit archiveMessages);
+our @EXPORT = qw(setConf connectDB disconnectDB checkIncoming checkOutgoing archiveMessages);
 
-our $dbh; #Database handle
-our %conf; #configuration variables
-our $logger = Log::Log4perl->get_logger();
+my $dbh; #Database handle
+my %conf; #configuration variables
+my $logger = Log::Log4perl->get_logger();
 
 sub setConf {
     my $conf_ref = shift;
@@ -189,29 +189,6 @@ sub mailAdmin {
     $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
 }
 
-sub quit {
-    my $signal = shift;
-    my $pid_file = shift;
-
-    #Log the fact that we're quiting
-    $logger->info("Caught $signal.");
-    $logger->info('Talaria daemon exiting.');
-
-    #Disconnect from database
-    disconnectDB();
-
-    #Mail the admin a notification
-    unless ($signal eq 'SIGINT') { #SIGINT is used for normal shutdown
-	mailAdmin('talariad alert',"talariad went down at " . fromEpoch(time) . " due to $signal.");
-    }
-
-    #Remove PID file
-    unlink($pid_file);
-
-    #Exit
-    exit 0;
-}
-
 sub archiveMessages {
     my $received = $dbh->selectrow_array("SELECT COUNT(*) FROM Messages WHERE received_time > '" . fromEpoch(time - 24*60*60) . "'");
     my $sent = $dbh->selectrow_array("SELECT COUNT(*) FROM Messages WHERE sent_time > '" . fromEpoch(time - 24*60*60) . "'");
@@ -311,24 +288,6 @@ I<Arguments:>
 =item *
 
 The text of the message to mail the admin.
-
-=back
-
-I<Returns:> None.
-
-=item *
-
-B<quit>
-
-Exit gracefully, disconnecting from the DB and emailing a notification to the admin.
-
-I<Arguments:>
-
-=over
-
-=item *
-
-The signal. (e.g., SIGINT)
 
 =back
 
