@@ -20,16 +20,19 @@ use DBI;
 #Wait for their return
 #Check that they were returned at the correct time
 
+#todo: get this from conf file?
+my $test_address = 'return.to.me.beta@gmail.com';
+
 #Read the config file:
 my %conf = %{ getConf('conf/test.conf','foo') };
 
 #Clear DB
 my $dbh = DBI->connect(
-        "DBI:mysql:database=$conf{db_server}",
-        $conf{db_user},
-        $conf{db_pass},
-        {PrintError => 0, RaiseError => 1}
-    );
+    "DBI:mysql:database=$conf{db_server}",
+    $conf{db_user},
+    $conf{db_pass},
+    {PrintError => 0, RaiseError => 1}
+);
 $dbh->do('TRUNCATE TABLE Messages');
 
 $dbh->disconnect();
@@ -42,7 +45,7 @@ getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
 #Create mail:
 my $nMessages = 4;
 my $nMinutes = 2;
-my @messages = createMessages($nMessages,$nMinutes,'return.to.me.beta@gmail.com');
+my @messages = createMessages($nMessages,$nMinutes,$test_address);
 
 #Load the requested return times into a hash keyed by subject:
 my %requested;
@@ -71,9 +74,9 @@ my @raw_messages = getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
 #print "Checked mail at ",&now,"\n";
 
 #Print the headers the results:
-#my $format =  "%-20s %-20s %-20s %-20s\n";
-#printf $format,'Subject','Requested','Sent','Error (sec)';
-#print "-"x80,"\n";
+my $format =  "%-20s %-20s %-20s %-20s\n";
+printf $format,'Subject','Requested','Sent','Error (sec)';
+print "-"x80,"\n";
 
 #Load the Date header of each received message into a hash keyed by Subject header
 my %date;
@@ -83,6 +86,8 @@ for my $raw_message (@raw_messages) {
     $date{$subject} =  UnixDate(ParseDate($date),"%Y-%m-%d %T");
 }
 
+my $tolerance = 120; #seconds
+
 #For each message received, print the time requested and the time sent:
 for my $subject (sort keys %requested) {
     #Get the time this message was requested, and the time it was actually sent
@@ -90,12 +95,17 @@ for my $subject (sort keys %requested) {
     my $sent_time = $date{$subject};
 
     #To get the error, convert each date string to epoch seconds:
-    my $error = UnixDate(ParseDate($sent_time), "%s") - UnixDate(ParseDate($requested_time), "%s");
-
+    my $error;
+    if (defined $sent_time) {
+        $error = UnixDate(ParseDate($sent_time), "%s") - UnixDate(ParseDate($requested_time), "%s");
+    }
+    else {
+        $error = $tolerance + 1;
+    }
     #Print the results:
     if ($sent_time) {
-	#printf $format,$subject,$requested_time,$sent_time,$error;
-        ok($error < 120,$subject);
+	printf $format,$subject,$requested_time,$sent_time,$error;
+        ok($error < $tolerance,$subject);
     } else {
 	#printf $format,$subject,$requested_time,'Not Received','';
         fail($subject);
@@ -128,7 +138,7 @@ sub stopTalariad {
     my $pid_outgoing = <$in>;
     close $in;
 
-    system "kill -s SIGINT $pid_incoming";
-    system "kill -s SIGINT $pid_outgoing";
+    system "kill $pid_incoming";
+    system "kill $pid_outgoing";
 
 }

@@ -85,7 +85,7 @@ sub print_table {
 		print "</div>";
 	    } else {
                 if ($row->[$i]) {
-                    print $row->[$i];
+                    print pre( escapeHTML( $row->[$i] ) );
                 }
                 else {
                     print 'NONE';

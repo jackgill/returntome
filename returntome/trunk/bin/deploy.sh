@@ -3,14 +3,10 @@
 tar -cf Talaria.tar bin/* Mod/* cgi/* t/*
 sftp rtmadmin@rtmserver <<EOF
 cd deploy
-rm bin/*
-rmdir bin
-rm Mod/*
-rmdir Mod
-rm cgi/*
-rmdir cgi
-rm t/*
-rmdir t
+rm -rf bin
+rm -rf Mod
+rm -rf cgi
+rm -rf t
 put Talaria.tar
 bye
 EOF

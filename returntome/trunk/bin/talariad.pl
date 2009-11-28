@@ -6,12 +6,15 @@ use strict;
 use warnings;
 
 use Proc::Daemon;
+use DBI;
 
 use Mod::TieSTDERR;
 use Mod::TieSTDOUT;
 use Mod::Conf;
 use Mod::Crypt;
-use Mod::Talaria;
+use Mod::GetMail;
+use Mod::SendMail;
+use Mod::ParseMail;
 
 #Determine mode:
 die "Usage: $0 (incoming|outgoing|archive)\n" unless (scalar @ARGV == 1);
@@ -90,10 +93,15 @@ tie(*STDERR, 'Mod::TieSTDERR');
 tie(*STDOUT, 'Mod::TieSTDOUT');
 
 #Read conf file:
-my %conf = %{ readConf($conf_file, $key) };
+my %conf = %{ getConf($conf_file, $key) };
 
 #Connect to DB:
-connectDB();
+my $dbh = DBI->connect(
+    "DBI:mysql:database=$conf{db_server}",
+    $conf{db_user},
+    $conf{db_pass},
+    {PrintError => 0, RaiseError => 1}
+);
 
 my $working = 0; #flag indicating if subroutine is currently processing
 my $TERM = 0; #flag indicating if SIGTERM has been received
@@ -115,9 +123,11 @@ $SIG{HUP}  = sub {
         $HUP = 1;
     }
     else {
-        %conf = %{ readConf($conf_file, $key) };
+        %conf = %{ getConf($conf_file, $key) };
      }
 };
+
+$SIG{INT} = 'IGNORE'; #Just to be safe...
 
 #Main loop:
 while (1) {
@@ -140,12 +150,225 @@ while (1) {
     if ($TERM) {
         quit();
     }
+    #check to see if SIGHUP was received while subroutine was processing
     if ($HUP) {
-        readConf($conf_file, $key);
+        %conf = %{ getConf($conf_file, $key) };
     }
 
     #wait
     sleep $conf{interval};
+}
+
+sub checkIncoming {
+
+    #Check for new messages:
+    my @mail = getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
+
+    my @error_messages; #messages we are going to return immediately
+
+    #Prepare SQL statements:
+    my $create_entry = $dbh->prepare("INSERT INTO Messages VALUES (NULL, ?, NOW(), ?, NULL)");
+    my $store_raw = $dbh->prepare("INSERT INTO RawMail VALUES (?, AES_ENCRYPT(?,?))");
+    my $store_parsed = $dbh->prepare("INSERT INTO ParsedMail VALUES (?, AES_ENCRYPT(?,?))");
+
+    #Go through the mail:
+  MAIL:
+    for my $raw_mail (@mail) {
+
+        my $uid;
+	my $message; #hashref
+
+        #Try to create UID for message
+        eval {
+            $create_entry->execute(undef, undef);
+            $uid = $dbh->last_insert_id(undef,undef,undef,undef);
+	    $uid = sprintf("%09d",$uid);
+        };
+
+        #If UID wasn't created, log it
+        if ($@) {
+            $logger->error("Couldn't create UID.");
+            $logger->error($DBI::lasth->errstr);
+            $logger->error("Message follows:");
+            my $encrypted_mail = encrypt($conf{db_key}, $raw_mail);
+            $logger->error($encrypted_mail);
+            next MAIL;
+        };
+
+        #Try to store raw mail in DB
+        eval {
+            $store_raw->execute($uid, $raw_mail, $conf{db_key});
+        };
+
+        #If raw mail wasn't stored, log it
+        if ($@) {
+            $logger->error("Failed to store message $uid in RawMail:");
+            $logger->error($DBI::lasth->errstr);
+            $logger->error("Message follows:");
+            my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
+            $logger->error($encrypted_mail);
+            next MAIL;
+        }
+
+	#Attempt to MIME parse the message
+	eval {
+	    $message = parseMail($raw_mail, $conf{smtp_user}, $uid);
+	};
+
+	#If MIME parsing failed, move on to next message
+	if ($@) {
+	    $logger->error("Error MIME parsing message:");
+            $logger->error($@);
+            next MAIL;
+	}
+
+	#Unpack message:
+	my $return_time = $message->{return_time};
+	my $address = $message->{address};
+	my $parsed_mail = $message->{mail};
+
+        #Try to store parsed mail in DB
+	eval {
+	    $store_parsed->execute($uid, $parsed_mail, $conf{db_key});
+	};
+
+        #If parsed mail wasn't stored, log it
+	if ($@) {
+            $logger->error("Failed to store message $uid in ParsedMail:");
+            $logger->error($DBI::lasth->errstr);
+            $logger->error("Message follows:");
+	    my $encrypted_mail = encrypt($conf{db_key}, $parsed_mail);
+	    $logger->error($encrypted_mail);
+            next MAIL;
+	}
+
+        #Try to store address
+        eval {
+            $dbh->do("UPDATE Messages SET address = '$address' WHERE uid = '$uid'");
+        };
+        if ($@) {
+            $logger->error("Failed to store address $address for message $uid:");
+            $logger->error($DBI::lasth->errstr);
+            $logger->error("Message follows:");
+        }
+
+	#If there we got a return time, store it.
+	if (defined $return_time) {
+            eval {
+                $dbh->do("UPDATE Messages SET return_time = '$return_time' WHERE uid = '$uid'");
+            };
+            if ($@) {
+                $logger->error("Failed to store return time $return_time for message $uid:");
+                $logger->error($DBI::lasth->errstr);
+                $logger->error("Message follows:");
+            }
+	}
+        else { #If we didn't return the message to sender.
+            push @error_messages, $message;
+        }
+    }
+
+    #Return messages for which there was an error to the sender:
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, @error_messages);
+
+    #Mark the messages as sent
+    for my $uid (@sent_uids) {
+        eval {
+            $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+        };
+        if ($@) {
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid");
+            $logger->error($DBI::lasth->errstr);
+        }
+    }
+}
+
+sub checkOutgoing {
+
+    #Check the database for messages to send:
+    my $messages_ref = $dbh->selectall_arrayref("SELECT Messages.uid, Messages.address, AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') AS mail FROM Messages INNER JOIN ParsedMail WHERE Messages.return_time < NOW() AND Messages.sent_time IS NULL AND Messages.uid = ParsedMail.uid", { Slice => {} });
+
+    #Send the messages:
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},  @{ $messages_ref } );
+
+    #Mark the messages as sent
+    for my $uid (@sent_uids) {
+        eval {
+            $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
+        };
+        if ($@) {
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid");
+            $logger->error($DBI::lasth->errstr);
+        }
+    }
+}
+
+sub archiveMessages {
+    eval {
+        #Determine how many messages were received and sent in the last 24 hours
+        my $received = $dbh->selectrow_array(
+            "SELECT COUNT(*) FROM Messages WHERE received_time > '" . fromEpoch(time - 24*60*60) . "'"
+        );
+        my $sent = $dbh->selectrow_array(
+            "SELECT COUNT(*) FROM Messages WHERE sent_time > '" . fromEpoch(time - 24*60*60) . "'"
+        );
+
+        #Retrieve messages to be archived
+        my $archive_time = fromEpoch(time);
+        my $messages_ref = $dbh->selectall_arrayref(
+            "SELECT Messages.uid, address, received_time, return_time, sent_time, RawMail.mail, ParsedMail.mail " .
+            "FROM Messages INNER JOIN ParsedMail INNER JOIN RawMail " .
+            "WHERE Messages.uid = ParsedMail.uid AND Messages.uid = RawMail.uid AND Messages.sent_time < '$archive_time'"
+        );
+        my @messages = @{ $messages_ref };
+
+        #Determine how many messages are being archived
+        my $archived = scalar @messages;
+
+        #Move messages to archive table
+        my $archive = $dbh->prepare("INSERT INTO Archive VALUE(?,?,?,?,?,?,?)");
+        for my $message (@messages) {
+            $archive->execute(@{ $message });
+            $dbh->do("DELETE FROM Messages WHERE uid = '$message->[0]'");
+        }
+
+        #Delete old messages in archive
+        my $delete_time = fromEpoch(time - 7 * 24 * 60 * 60);
+        my $deleted = $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
+        $deleted += 0; #force numeric context;
+        #Prepare report
+        my $report =<<"END_REPORT";
+In the last 24 hours,
+Messages Received: $received
+Messages Sent    : $sent
+Messages Archived: $archived
+Messages Deleted : $deleted
+END_REPORT
+
+        mailAdmin('Talaria report ' . fromEpoch(time),$report);
+    };
+    if ($@) {
+        mailAdmin('Talaria report ' . fromEpoch(time) , "Error preparing report: $@");
+    }
+    #TODO: database maintainance
+}
+
+sub mailAdmin {
+    my $subject = shift;
+    my $text = shift;
+
+    #Create the message:
+    my %message = (
+	mail => "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: $subject\n\n$text\n\n",
+	address => $conf{admin_address},
+        uid => 'mailadmin',
+	);
+
+    #Send the message:
+    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
+
+    #Log any errors:
+    $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
 }
 
 sub quit {
@@ -153,24 +376,13 @@ sub quit {
     $logger->info('Caught SIGTERM, exiting.');
 
     #Disconnect from DB:
-    disconnectDB();
+    $dbh->disconnect();
 
     #Remove PID file
     unlink($pid_file);
 
     #Exit
     exit 0;
-}
-
-sub readConf {
-    my ($conf_file, $key) = @_;
-
-    my $conf = getConf($conf_file, $key);
-
-    #Set conf vars:
-    setConf($conf);
-
-    return $conf;
 }
 
 =head1 NAME

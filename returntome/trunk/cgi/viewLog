@@ -1,0 +1,38 @@
+#!/usr/bin/perl
+
+use 5.010;
+
+use strict;
+use warnings;
+
+use CGI qw(:standard);
+print header, start_html('Return To Me');
+
+#Incoming log:
+print strong('talariad_incoming.log'), br();
+print '<pre>';
+system 'cat ../log/talariad_incoming.log';
+print '</pre>';
+print br();
+
+#Ougoing log:
+print strong('talariad_outgoing.log'), br();
+print '<pre>';
+system 'cat ../log/talariad_outgoing.log';
+print '</pre>';
+print br();
+
+#Archive log:
+print strong('talariad_archive.log'), br();
+print '<pre>';
+system 'cat ../log/talariad_archive.log';
+print '</pre>';
+print end_html;
+
+=head1 NAME
+
+=head1 USAGE
+
+=head1 DESCRIPTION
+
+=head1 DEPENDENCIES

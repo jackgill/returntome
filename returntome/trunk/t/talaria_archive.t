@@ -11,17 +11,13 @@ use DBI;
 use Mod::Test;
 use Mod::ParseMail;
 
-BEGIN {
-    use_ok('Mod::Talaria');
-}
-
 #Populate DB
 my $dbh = DBI->connect(
-        "DBI:mysql:database=ReturnToMe",
-        'root',
-        'foo',
-        {PrintError => 0, RaiseError => 1}
-    );
+    "DBI:mysql:database=ReturnToMe",
+    'root',
+    'foo',
+    {PrintError => 0, RaiseError => 1}
+);
 
 $dbh->do('TRUNCATE TABLE Messages');
 $dbh->do('TRUNCATE TABLE Archive');
