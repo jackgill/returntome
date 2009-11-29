@@ -14,10 +14,6 @@ BEGIN {
 
 Log::Log4perl::init('conf/log4perl_test.conf');
 
-if (!(-d '/tmp/mimedump/')) {
-    mkdir('/tmp/mimedump/') or die "Couldn't mkdir /tmp/mimedump/: $!\n";
-}
-
 my @tests= qw(non-mime multipart-alternative multipart-mixed multipart-mixed-encoded);
 
 my $uid = 0;

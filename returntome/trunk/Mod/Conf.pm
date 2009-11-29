@@ -18,15 +18,19 @@ sub getConf {
     my %conf; #stores conf variables
 
     #Open the conf file:
-    open(CONFIG,"<$file") or die "Couldn't open $file: $!\n";
-    my @slurp = <CONFIG>;
+    open(my $in, '<', $file) or die "Couldn't open configuration file $file: $!\n";
+    my @slurp = <$in>;
+    close $in;
+
     my $cipher_text = join("", @slurp);
 
     #Decrypt the conf file:
     my $plain_text = decrypt($key, $cipher_text);
 
     #Determine if decryption was successful:
-    return {} unless($plain_text =~ /[\w\s]{10,}/);
+    unless ($plain_text =~ /[\w\s]{10}/) {
+        die "Configuration file decryption failed. Most likely the wrong decryption key was used.\n";
+    }
 
     #Read the conf file:
     my @file = split("\n",$plain_text);
@@ -42,17 +46,21 @@ sub getConf {
 
     #Check that conf variables are defined:
     my @conf_vars = qw(
-imap_server imap_user imap_pass 
-smtp_server smtp_user smtp_pass 
+imap_server imap_user imap_pass
+smtp_server smtp_user smtp_pass
 db_server db_user db_pass db_key
-interval
+interval_incoming
+interval_outgoing
+interval_archive
 admin_address
 );
-    for (@conf_vars) {
-	die "Configuration error: $file does not define $_\n" unless (defined $conf{$_});
+    for my $conf_var (@conf_vars) {
+        unless ( defined $conf{$conf_var} ) {
+            die "Configuration error: $file does not define $conf_var\n";
+        }
     }
 
-    return \%conf;
+    return %conf;
 }
 
 
@@ -80,7 +88,12 @@ A module for reading encrypted configuration files.
 
 =item *
 
-getConf(file, key)
+B<getConf>
+
+Read a configuration file. This subroutine will die under three circumstances:
+The conf file cannot be found.
+The conf file cannot be decrypted (almost certainly due to an invalid encryption key)
+The conf file fails to define a required variable.
 
 I<Arguments:>
 
@@ -98,7 +111,7 @@ I<Returns:>
 
 =item *
 
-A reference to hash containing the key,value pairs from the file. Returns a reference to an empty hash if decryption failed.
+A hash containing the key,value pairs from the file.
 
 =back
 

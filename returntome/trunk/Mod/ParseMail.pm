@@ -24,24 +24,28 @@ my $logger = Log::Log4perl->get_logger();
 sub parseMail {
     my ($raw_mail, $from_address, $uid) = @_;
 
-    my $tmp_dir = '/tmp/mimedump/';
-
     #Create the parser:
     my $parser = new MIME::Parser;
-    $parser->output_dir($tmp_dir);
-
-    #Clean out temporary directory
-    rmtree( $tmp_dir, {keep_root => 1} );
+    $parser->output_under('/tmp');
 
     #parse the mail:
-    my $entity = $parser->parse_data( $raw_mail );
+    my $entity;
+    eval {
+        $entity = $parser->parse_data( $raw_mail );
+    };
 
-    #Check the parser for errors:
+    #Check the parser for fatal errors
+    if ($@) {
+        $parser->filer->purge();
+        die "MIME parser fatal error: $@\n";
+    }
+
+    #Check the parser for non fatal errors
     for my $error ($parser->results->msgs) {
         $logger->error("MIME parser error for message $uid:\n$error");
     }
 
-    #get the headers:
+    #get the headers
     my $head = $entity->head;
     my $subject = $head->get('Subject');
     if (!$subject) { #check for empty subject line
@@ -174,6 +178,9 @@ sub parseMail {
 	address => $from,
         uid => $uid,
 	);
+
+    #Remove temp files created by parser
+    $parser->filer->purge();
 
     return \%message;
 }

@@ -25,12 +25,6 @@ my $subroutine_ref;
 given($mode) {
     when('incoming') {
 	$subroutine_ref = \&checkIncoming;
-
-        #Create temporary directory for MIME parser
-        my $tmp_dir = '/tmp/mimedump/';
-        if ( !(-d $tmp_dir) ) {
-            mkdir($tmp_dir, 0700) or die "Couldn't create $tmp_dir: $!";
-        }
     }
     when('outgoing') {
 	$subroutine_ref = \&checkOutgoing;
@@ -59,13 +53,11 @@ if (-e $pid_file) {
 #Get encryption key for conf file:
 my $key = getCheckedKey($key_digest);
 
+#Read conf file:
+my %conf = getConf($conf_file, $key);
+
 #daemonize:
 Proc::Daemon::Init();
-
-#create PID file:
-open(my $out, '>', $pid_file);
-print $out "$$\n";
-close $out;
 
 #initialize the logger:
 my $logger_conf = <<"END_LOGGER_CONF";
@@ -85,37 +77,37 @@ Log::Log4perl::init( \$logger_conf );
 my $logger = Log::Log4perl->get_logger();
 
 #Start logging:
-$logger->info("PID: $$");
-$logger->info('Talaria daemon started.');
+$logger->info("Started talariad.pl, PID: $$");
 
 #Send output streams to logger:
 tie(*STDERR, 'Mod::TieSTDERR');
 tie(*STDOUT, 'Mod::TieSTDOUT');
 
-#Read conf file:
-my %conf = %{ getConf($conf_file, $key) };
+#create PID file:
+if ( open(my $out, '>', $pid_file) ) {
+    print $out "$$\n";
+    close $out;
+}
+else {
+    $logger->error("Couldn't create PID file: $!");
+}
 
-#Connect to DB:
-my $dbh = DBI->connect(
-    "DBI:mysql:database=$conf{db_server}",
-    $conf{db_user},
-    $conf{db_pass},
-    {PrintError => 0, RaiseError => 1}
-);
+#DB handle is global so that quit() can disconnect it:
+my $dbh;
 
-my $working = 0; #flag indicating if subroutine is currently processing
-my $TERM = 0; #flag indicating if SIGTERM has been received
+my $working = 0; #flag indicating if daemon is executing subroutine
+my $TERM    = 0; #flag indicating if SIGTERM has been received
+my $HUP     = 0; #flag indicating if SIGHUP has been received
 
 #SIGTERM commands a graceful shutdown
 $SIG{TERM} = sub {
-    if ($working) { #subroutine is currently processing
-        $TERM = 1; #set flag, daemon will exit when subroutine finishes
-    } else { #daemon is sleeping
+    if ($working) { #daemon is currently executing subroutine
+        $TERM = 1;  #set flag, daemon will exit when subroutine is done executing
+    }
+    else { #daemon is sleeping
         quit();
     }
 };
-
-my $HUP = 0; #flag indicating if SIGHUP has been received
 
 #SIGHUP commands a re-read of the conf file
 $SIG{HUP}  = sub {
@@ -123,11 +115,12 @@ $SIG{HUP}  = sub {
         $HUP = 1;
     }
     else {
-        %conf = %{ getConf($conf_file, $key) };
-     }
+        %conf = getConf($conf_file, $key);
+    }
 };
 
-$SIG{INT} = 'IGNORE'; #Just to be safe...
+#daemon should never receive SIGINT, but just to be safe...
+$SIG{INT} = 'IGNORE';
 
 #Main loop:
 while (1) {
@@ -138,6 +131,7 @@ while (1) {
     eval {
 	&{ $subroutine_ref };
     };
+
     #Log any errors
     if ($@) {
         $logger->error($@);
@@ -150,16 +144,29 @@ while (1) {
     if ($TERM) {
         quit();
     }
+
     #check to see if SIGHUP was received while subroutine was processing
     if ($HUP) {
-        %conf = %{ getConf($conf_file, $key) };
+        %conf = getConf($conf_file, $key);
+        $HUP = 0;
     }
 
     #wait
-    sleep $conf{interval};
+    sleep $conf{"interval_$mode"};
 }
 
 sub checkIncoming {
+    #Connect to DB:
+    $dbh = DBI->connect_cached (
+        "DBI:mysql:database=$conf{db_server}",
+        $conf{db_user},
+        $conf{db_pass},
+        {PrintError => 0, RaiseError => 1}
+    );
+    if (! $dbh ) {
+        $logger->error("Could not connect to DB: " . $DBI::errstr);
+        return;
+    }
 
     #Check for new messages:
     my @mail = getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
@@ -205,7 +212,7 @@ sub checkIncoming {
             $logger->error("Failed to store message $uid in RawMail:");
             $logger->error($DBI::lasth->errstr);
             $logger->error("Message follows:");
-            my $encrypted_mail = &encrypt($conf{db_key}, $raw_mail);
+            my $encrypted_mail = encrypt($conf{db_key}, $raw_mail);
             $logger->error($encrypted_mail);
             next MAIL;
         }
@@ -249,10 +256,10 @@ sub checkIncoming {
         if ($@) {
             $logger->error("Failed to store address $address for message $uid:");
             $logger->error($DBI::lasth->errstr);
-            $logger->error("Message follows:");
+            next MAIL;
         }
 
-	#If there we got a return time, store it.
+	#If we got a return time, store it.
 	if (defined $return_time) {
             eval {
                 $dbh->do("UPDATE Messages SET return_time = '$return_time' WHERE uid = '$uid'");
@@ -260,10 +267,10 @@ sub checkIncoming {
             if ($@) {
                 $logger->error("Failed to store return time $return_time for message $uid:");
                 $logger->error($DBI::lasth->errstr);
-                $logger->error("Message follows:");
+                next MAIL;
             }
 	}
-        else { #If we didn't return the message to sender.
+        else { #If we didn't get a return time, we will return the message to sender.
             push @error_messages, $message;
         }
     }
@@ -277,16 +284,32 @@ sub checkIncoming {
             $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
         };
         if ($@) {
-            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid");
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid:");
             $logger->error($DBI::lasth->errstr);
         }
     }
 }
 
 sub checkOutgoing {
+    #Connect to DB:
+    $dbh = DBI->connect_cached (
+        "DBI:mysql:database=$conf{db_server}",
+        $conf{db_user},
+        $conf{db_pass},
+        {PrintError => 0, RaiseError => 1}
+    );
+    if (! $dbh ) {
+        $logger->error("Could not connect to DB: " . $DBI::errstr);
+        return;
+    }
 
     #Check the database for messages to send:
-    my $messages_ref = $dbh->selectall_arrayref("SELECT Messages.uid, Messages.address, AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') AS mail FROM Messages INNER JOIN ParsedMail WHERE Messages.return_time < NOW() AND Messages.sent_time IS NULL AND Messages.uid = ParsedMail.uid", { Slice => {} });
+    my $messages_ref = $dbh->selectall_arrayref(
+        "SELECT Messages.uid, Messages.address, AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') AS mail " .
+        "FROM Messages INNER JOIN ParsedMail " .
+        "WHERE Messages.return_time < NOW() AND Messages.sent_time IS NULL AND Messages.uid = ParsedMail.uid",
+        { Slice => {} }
+    );
 
     #Send the messages:
     my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},  @{ $messages_ref } );
@@ -297,18 +320,32 @@ sub checkOutgoing {
             $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
         };
         if ($@) {
-            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid");
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid:");
             $logger->error($DBI::lasth->errstr);
         }
     }
 }
 
 sub archiveMessages {
+    #Connect to DB:
+    $dbh = DBI->connect_cached (
+        "DBI:mysql:database=$conf{db_server}",
+        $conf{db_user},
+        $conf{db_pass},
+        {PrintError => 0, RaiseError => 1}
+    );
+    if (! $dbh ) {
+        $logger->error("Could not connect to DB: " . $DBI::errstr);
+        return;
+    }
+
     eval {
-        #Determine how many messages were received and sent in the last 24 hours
+        #Determine how many messages were received in the last 24 hours
         my $received = $dbh->selectrow_array(
             "SELECT COUNT(*) FROM Messages WHERE received_time > '" . fromEpoch(time - 24*60*60) . "'"
         );
+
+        #Determine how many messages were sent in the last 24 hours
         my $sent = $dbh->selectrow_array(
             "SELECT COUNT(*) FROM Messages WHERE sent_time > '" . fromEpoch(time - 24*60*60) . "'"
         );
@@ -328,7 +365,7 @@ sub archiveMessages {
         #Move messages to archive table
         my $archive = $dbh->prepare("INSERT INTO Archive VALUE(?,?,?,?,?,?,?)");
         for my $message (@messages) {
-            $archive->execute(@{ $message });
+            $archive->execute( @{ $message } );
             $dbh->do("DELETE FROM Messages WHERE uid = '$message->[0]'");
         }
 
@@ -336,6 +373,7 @@ sub archiveMessages {
         my $delete_time = fromEpoch(time - 7 * 24 * 60 * 60);
         my $deleted = $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
         $deleted += 0; #force numeric context;
+
         #Prepare report
         my $report =<<"END_REPORT";
 In the last 24 hours,
@@ -345,9 +383,11 @@ Messages Archived: $archived
 Messages Deleted : $deleted
 END_REPORT
 
-        mailAdmin('Talaria report ' . fromEpoch(time),$report);
+        #Send report
+        mailAdmin('Talaria report ' . fromEpoch(time), $report);
     };
     if ($@) {
+        $logger->error($@);
         mailAdmin('Talaria report ' . fromEpoch(time) , "Error preparing report: $@");
     }
     #TODO: database maintainance
@@ -368,7 +408,7 @@ sub mailAdmin {
     my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
 
     #Log any errors:
-    $logger->error("Error: failed to mail admin: $text") unless (@sent_uids);
+    $logger->error("Failed to mail admin: $text") unless (@sent_uids);
 }
 
 sub quit {
@@ -420,5 +460,9 @@ B<archive> - move sent messages from main tables to archive table, delete old ar
 =item *
 
 Proc::Daemon
+
+=item *
+
+DBI
 
 =back

@@ -16,8 +16,8 @@ my $digest = $ARGV[1];
 my $key = getCheckedKey($digest);
 
 #Decrypt the file:
-open(my $in , '<', $file            ) or die "Couldn't open $file: $!\n";
-open(my $out, '>', $file . '.decrypt') or die "Couldn't open $file.decrypt: $!\n";
+open(my $in , '<', $file          ) or die "Couldn't open $file: $!\n";
+open(my $out, '>', "$file.decrypt") or die "Couldn't open $file.decrypt: $!\n";
 
 my @slurp = <$in>;
 my $cipher_text = join("", @slurp);
@@ -26,6 +26,8 @@ print $out $plain_text;
 
 close $in;
 close $out;
+
+#rename("$file.decrypt", $file) or die "Couldn't rename $file.decrypt: $!\n";
 
 __END__
 

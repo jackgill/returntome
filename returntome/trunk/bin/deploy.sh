@@ -1,18 +1,25 @@
 #!/bin/bash
 
+#create tarball for deployment
 tar -cf Talaria.tar bin/* Mod/* cgi/* t/*
+
+#put tarball on test host
 sftp rtmadmin@rtmserver <<EOF
+cd deploy
+put Talaria.tar
+bye
+EOF
+
+#Remove tarball on local host
+rm Talaria.tar
+
+#remove old files and unpack tarball on test host
+ssh rtmadmin@rtmserver <<EOF
 cd deploy
 rm -rf bin
 rm -rf Mod
 rm -rf cgi
 rm -rf t
-put Talaria.tar
-bye
-EOF
-rm Talaria.tar
-ssh rtmadmin@rtmserver <<EOF
-cd deploy
 tar -xf Talaria.tar
 rm Talaria.tar
 logout

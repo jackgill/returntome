@@ -21,10 +21,10 @@ use DBI;
 #Check that they were returned at the correct time
 
 #todo: get this from conf file?
-my $test_address = 'return.to.me.beta@gmail.com';
-
+my $test_address = 'return.to.me.test@gmail.com';
+print "Sending test messages to $test_address\n";
 #Read the config file:
-my %conf = %{ getConf('conf/test.conf','foo') };
+my %conf = getConf('conf/test.conf','foo');
 
 #Clear DB
 my $dbh = DBI->connect(
@@ -34,10 +34,15 @@ my $dbh = DBI->connect(
     {PrintError => 0, RaiseError => 1}
 );
 $dbh->do('TRUNCATE TABLE Messages');
+$dbh->do('TRUNCATE TABLE Archive');
 
 $dbh->disconnect();
 
-startTalariad();
+#Start talariad.pl
+my $key = 'foo';
+open(STDIN, "echo $key|") or BAIL_OUT("Couldn't open STDIN: $!");
+system 'bin/talariactl.pl start';
+close STDIN;
 
 #Clear inbox:
 getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
@@ -63,15 +68,11 @@ for my $message (@messages) {
     sleep 15;
 }
 
-#print "Sent mail at ",&now,"\n";
-
 #Wait:
 sleep(($nMinutes + 2) * 60);
 
 #Check mail:
 my @raw_messages = getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
-
-#print "Checked mail at ",&now,"\n";
 
 #Print the headers the results:
 my $format =  "%-20s %-20s %-20s %-20s\n";
@@ -113,32 +114,11 @@ for my $subject (sort keys %requested) {
 
 }
 
-#Notify whoever's paying attention:
-system "aplay -q ~/beep-7.wav";
+#Stop talariad.pl
+system 'bin/talariactl.pl stop';
 
-stopTalariad();
+#Notify whoever's paying attention
+system 'aplay -q ~/beep-7.wav';
 
-sub startTalariad {
-    open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
-    system 'bin/talariad.pl incoming';
-    close STDIN;
 
-    open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
-    system 'bin/talariad.pl outgoing';
-    close STDIN;
 
-}
-
-sub stopTalariad {
-    open(my $in,'<','talariad_incoming.pid') or die "Couldn't open talaria_incoming.pid: $!\n";
-    my $pid_incoming = <$in>;
-    close $in;
-
-    open($in,'<','talariad_outgoing.pid') or die "Couldn't open talaria_outgoing.pid: $!\n";
-    my $pid_outgoing = <$in>;
-    close $in;
-
-    system "kill $pid_incoming";
-    system "kill $pid_outgoing";
-
-}
