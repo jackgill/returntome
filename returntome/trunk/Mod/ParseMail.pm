@@ -10,7 +10,6 @@ use bytes;
 use Exporter;
 use Log::Log4perl;
 use MIME::Parser;
-use File::Path;
 use Date::Manip;
 use DateTime;
 
@@ -67,11 +66,11 @@ sub parseMail {
     if ($head->count('MIME-Version')) {#Message is MIME formatted
 
 	#Add MIME headers to mail:
-	my @headers = ('MIME-Version','Content-Type','Content-Transfer-Encoding');
-	for my $header_name (@headers) {
+	my @header_names = ('MIME-Version','Content-Type','Content-Transfer-Encoding');
+	for my $header_name (@header_names) {
             my $header_value = $head->get($header_name);
             if ($header_value) {
-                $parsed_mail .= "$header_name: " . $head->get($header_name);
+                $parsed_mail .= "$header_name: $header_value";
             }
 	}
 
@@ -107,6 +106,7 @@ sub parseMail {
     else { #Message is not MIME formatted
 	$text_plain = $entity;
     }
+    #TODO: what if plain text part is not found?
 
     #Process text/plain and text/html parts:
     my @plain_lines = readEntity($text_plain);
@@ -117,10 +117,11 @@ sub parseMail {
 
     #Look for instructions:
     my $instructions;
+  LINE:
     for my $line (@plain_lines) {
 	if ($line =~ /^ \s* (?: r2m | rtm | return \s* to \s* me) :? \s* (.+) \s* $/ixms) {
 	    $instructions = $1;
-	    last;
+	    last LINE;
 	}
     }
 
@@ -152,13 +153,14 @@ sub parseMail {
         $error_message = "Sorry, your message size must be less than 8 MB.";
     }
 
-    #Add an error message or an ad to the message as appropriate:
+    #Add an error message or an ad to the message as appropriate
     if ($error_message) {
+        $return_time = undef; #to guarantee immediate return
 	unshift @plain_lines, $error_message . "\n\n";
 	unshift @html_lines, "<b>" . $error_message . "</b><br><br>\n\n";
     } else {
-	unshift @plain_lines, &getPlainAd . "\n\n";
-	unshift @html_lines, &getHTMLAd . ("-" x 70) . "<br><br>";
+	unshift @plain_lines, getPlainAd() . "\n\n";
+	unshift @html_lines, getHTMLAd() . ("-" x 70) . "<br><br>";
     }
 
     #Write the modified message:
@@ -169,7 +171,11 @@ sub parseMail {
     #Add the parsed MIME entity to the mail
     $parsed_mail .= "\n" . join('', @{ $entity->body } );
 
+    #Format 'From' address for storage in DB
     chomp $from;
+    if ($from =~ /<(.*?)>/) {
+        $from = $1;
+    }
 
     #assemble the message
     my %message = (
@@ -424,7 +430,7 @@ I<Returns:>
 
 =item *
 
-A formatted string represent the time.
+A formatted string representing the time.
 
 =back
 
@@ -444,15 +450,7 @@ MIME::Parser
 
 =item *
 
-File::Path
-
-=item *
-
 bytes
-
-=item *
-
-File::Path
 
 =item *
 

@@ -20,9 +20,20 @@ use DBI;
 #Wait for their return
 #Check that they were returned at the correct time
 
-#todo: get this from conf file?
-my $test_address = 'return.to.me.test@gmail.com';
-print "Sending test messages to $test_address\n";
+#Usage: talaria.t 1 or talaria.t to test development deployment
+#       talaria.t 0 to test test deployment
+my $local = 1;
+if (@ARGV) {
+    $local = $ARGV[0];
+}
+my $test_address;
+if ($local) {
+    $test_address= 'return.to.me.test@gmail.com';
+}
+else {
+    $test_address= 'return.to.me.beta@gmail.com';
+}
+
 #Read the config file:
 my %conf = getConf('conf/test.conf','foo');
 
@@ -33,16 +44,22 @@ my $dbh = DBI->connect(
     $conf{db_pass},
     {PrintError => 0, RaiseError => 1}
 );
-$dbh->do('TRUNCATE TABLE Messages');
-$dbh->do('TRUNCATE TABLE Archive');
+if ($dbh) {
+    $dbh->do('TRUNCATE TABLE Messages');
+    $dbh->do('TRUNCATE TABLE Archive');
+    $dbh->disconnect();
+}
+else {
+    die("Error: could not connect to DB: " . $DBI::errstr . "\n");
+}
 
-$dbh->disconnect();
-
-#Start talariad.pl
-my $key = 'foo';
-open(STDIN, "echo $key|") or BAIL_OUT("Couldn't open STDIN: $!");
-system 'bin/talariactl.pl start';
-close STDIN;
+if ($local) {
+    #Start talariad.pl
+    my $key = 'foo';
+    open(STDIN, "echo $key|") or BAIL_OUT("Couldn't open STDIN: $!");
+    system 'bin/talariactl.pl start';
+    close STDIN;
+}
 
 #Clear inbox:
 getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
@@ -91,31 +108,27 @@ my $tolerance = 120; #seconds
 
 #For each message received, print the time requested and the time sent:
 for my $subject (sort keys %requested) {
+
     #Get the time this message was requested, and the time it was actually sent
     my $requested_time = $requested{$subject};
     my $sent_time = $date{$subject};
 
-    #To get the error, convert each date string to epoch seconds:
-    my $error;
-    if (defined $sent_time) {
-        $error = UnixDate(ParseDate($sent_time), "%s") - UnixDate(ParseDate($requested_time), "%s");
-    }
-    else {
-        $error = $tolerance + 1;
-    }
     #Print the results:
     if ($sent_time) {
+        #To get the error, convert each date string to epoch seconds:
+        my $error = UnixDate(ParseDate($sent_time), "%s") - UnixDate(ParseDate($requested_time), "%s");
 	printf $format,$subject,$requested_time,$sent_time,$error;
         ok($error < $tolerance,$subject);
-    } else {
-	#printf $format,$subject,$requested_time,'Not Received','';
+    }
+    else {
         fail($subject);
     }
-
 }
 
-#Stop talariad.pl
-system 'bin/talariactl.pl stop';
+if ($local) {
+    #Stop talariad.pl
+    system 'bin/talariactl.pl stop';
+}
 
 #Notify whoever's paying attention
 system 'aplay -q ~/beep-7.wav';

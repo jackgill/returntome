@@ -15,15 +15,15 @@ given($ARGV[0]) {
     when ('start') {
         my $key = getCheckedKey('conf/key_digest.conf');
 
-        open(STDIN, "echo $key|") or BAIL_OUT("Couldn't open STDIN: $!");
+        open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
         system 'bin/talariad.pl incoming';
         close STDIN;
 
-        open(STDIN, "echo $key|") or BAIL_OUT("Couldn't open STDIN: $!");
+        open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
         system 'bin/talariad.pl outgoing';
         close STDIN;
 
-        open(STDIN, "echo $key|") or BAIL_OUT("Couldn't open STDIN: $!");
+        open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
         system 'bin/talariad.pl archive';
         close STDIN;
     }

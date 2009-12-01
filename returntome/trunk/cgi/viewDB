@@ -43,7 +43,7 @@ sub displayTable {
 
     #Read conf file:
     my $conf_file = '../conf/talaria.conf';
-    my %conf = %{ getConf($conf_file, $key) };
+    my %conf = getConf($conf_file, $key);
 
     unless (%conf) {
         print h4('Invalid decryption key.');

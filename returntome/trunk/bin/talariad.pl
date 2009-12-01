@@ -224,7 +224,7 @@ sub checkIncoming {
 
 	#If MIME parsing failed, move on to next message
 	if ($@) {
-	    $logger->error("Error MIME parsing message:");
+	    $logger->error("Error MIME parsing message $uid:");
             $logger->error($@);
             next MAIL;
 	}
@@ -286,6 +286,8 @@ sub checkIncoming {
         if ($@) {
             $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid:");
             $logger->error($DBI::lasth->errstr);
+            #TODO: if this statement fails, messages could be sent multiple time
+            #fallback: store in memory array of messages we've sent?
         }
     }
 }
