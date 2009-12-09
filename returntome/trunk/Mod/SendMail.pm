@@ -6,7 +6,7 @@ use strict;
 use Exporter;
 use Net::SMTP::SSL;
 use Log::Log4perl;
-use Data::Dumper::Simple;
+
 our @ISA = ("Exporter");
 our @EXPORT = qw(sendMessages);
 
@@ -61,7 +61,7 @@ sub sendMessages {
 	if ($smtp_response =~ /2.0.0 OK/) {
 	    push @sent_uids, $uid;
 	} else {
-	    $logger->error("Did not send message $uid.");
+	    $logger->error("Did not send message $uid");
 	    $logger->error($smtp_response);
 	}
     }
@@ -83,7 +83,7 @@ Mod::SendMail
     mail => 'this is a mail message',
     uid => 00000001,
     );
-    my @sent_uids = sendMail('smtp.gmail.com','return.to.me.test@gmail.com','password',\%message);
+    my @sent_uids = sendMessages('smtp.domain.tld','address@domain.tld','secret',\%message);
 
 =head1 DESCRIPTION
 

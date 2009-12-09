@@ -7,10 +7,10 @@ use warnings;
 
 use Proc::Daemon;
 use DBI;
+use Config::Tiny;
 
 use Mod::TieSTDERR;
 use Mod::TieSTDOUT;
-use Mod::Conf;
 use Mod::Crypt;
 use Mod::GetMail;
 use Mod::SendMail;
@@ -37,34 +37,36 @@ given($mode) {
     }
 }
 
-#get the CWD before we daemonize:
+#get the CWD before we daemonize
 my $cwd = $ENV{PWD};
 
 #conf variables:
 my $conf_file  = "$cwd/conf/talaria.conf";
 my $key_digest = "$cwd/conf/key_digest.conf";
 my $pid_file   = "$cwd/talariad_$mode.pid";
+my $log_file   = "$cwd/log/talariad_$mode.log";
 
-#Only one instance at a time, please:
+#Only one instance at a time, please
 if (-e $pid_file) {
     die "talariad is already running.\n" ;
 }
 
-#Get encryption key for conf file:
+#Get encryption key for conf file
 my $key = getCheckedKey($key_digest);
 
-#Read conf file:
-my %conf = getConf($conf_file, $key);
+#Configuration options represented as Config::Tiny object
+my $conf;
+read_conf();
 
-#daemonize:
+#daemonize
 Proc::Daemon::Init();
 
-#initialize the logger:
+#initialize the logger
 my $logger_conf = <<"END_LOGGER_CONF";
 log4perl.rootLogger=INFO, LOG
 
 log4perl.appender.LOG=Log::Log4perl::Appender::File
-log4perl.appender.LOG.filename=$cwd/log/talariad_$mode.log
+log4perl.appender.LOG.filename=$log_file
 log4perl.appender.LOG.mode=write
 log4perl.appender.LOG.layout=PatternLayout
 log4perl.appender.LOG.layout.ConversionPattern=[\%d{DATE}] \%C: \%p: \%m \%n
@@ -115,7 +117,7 @@ $SIG{HUP}  = sub {
         $HUP = 1;
     }
     else {
-        %conf = getConf($conf_file, $key);
+        read_conf();
     }
 };
 
@@ -147,29 +149,29 @@ while (1) {
 
     #check to see if SIGHUP was received while subroutine was processing
     if ($HUP) {
-        %conf = getConf($conf_file, $key);
+        read_conf();
         $HUP = 0;
     }
 
     #wait
-    sleep $conf{"interval_$mode"};
+    sleep $conf->{general}->{"interval_$mode"};
 }
 
 sub checkIncoming {
-    #Connect to DB:
-    $dbh = DBI->connect_cached (
-        "DBI:mysql:database=$conf{db_server}",
-        $conf{db_user},
-        $conf{db_pass},
-        {PrintError => 0, RaiseError => 1}
-    );
+    connect_db();
     if (! $dbh ) {
         $logger->error("Could not connect to DB: " . $DBI::errstr);
         return;
     }
 
+    my $db_key = $conf->{db}->{key};
+
     #Check for new messages:
-    my @mail = getMail(@conf{'imap_server', 'imap_user', 'imap_pass'});
+    my @mail = getMail(
+        $conf->{imap}->{server},
+        $conf->{imap}->{user},
+        $conf->{imap}->{pass},
+    );
 
     my @error_messages; #messages we are going to return immediately
 
@@ -197,14 +199,14 @@ sub checkIncoming {
             $logger->error("Couldn't create UID.");
             $logger->error($DBI::lasth->errstr);
             $logger->error("Message follows:");
-            my $encrypted_mail = encrypt($conf{db_key}, $raw_mail);
+            my $encrypted_mail = encrypt($db_key, $raw_mail);
             $logger->error($encrypted_mail);
             next MAIL;
         };
 
         #Try to store raw mail in DB
         eval {
-            $store_raw->execute($uid, $raw_mail, $conf{db_key});
+            $store_raw->execute($uid, $raw_mail, $db_key);
         };
 
         #If raw mail wasn't stored, log it
@@ -212,14 +214,14 @@ sub checkIncoming {
             $logger->error("Failed to store message $uid in RawMail:");
             $logger->error($DBI::lasth->errstr);
             $logger->error("Message follows:");
-            my $encrypted_mail = encrypt($conf{db_key}, $raw_mail);
+            my $encrypted_mail = encrypt($db_key, $raw_mail);
             $logger->error($encrypted_mail);
             next MAIL;
         }
 
 	#Attempt to MIME parse the message
 	eval {
-	    $message = parseMail($raw_mail, $conf{smtp_user}, $uid);
+	    $message = parseMail($raw_mail, $conf->{smtp}->{user}, $uid);
 	};
 
 	#If MIME parsing failed, move on to next message
@@ -236,7 +238,7 @@ sub checkIncoming {
 
         #Try to store parsed mail in DB
 	eval {
-	    $store_parsed->execute($uid, $parsed_mail, $conf{db_key});
+	    $store_parsed->execute($uid, $parsed_mail, $db_key);
 	};
 
         #If parsed mail wasn't stored, log it
@@ -244,7 +246,7 @@ sub checkIncoming {
             $logger->error("Failed to store message $uid in ParsedMail:");
             $logger->error($DBI::lasth->errstr);
             $logger->error("Message follows:");
-	    my $encrypted_mail = encrypt($conf{db_key}, $parsed_mail);
+	    my $encrypted_mail = encrypt($db_key, $parsed_mail);
 	    $logger->error($encrypted_mail);
             next MAIL;
 	}
@@ -276,7 +278,12 @@ sub checkIncoming {
     }
 
     #Return messages for which there was an error to the sender:
-    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, @error_messages);
+    my @sent_uids = sendMessages(
+        $conf->{smtp}->{server},
+        $conf->{smtp}->{user},
+        $conf->{smtp}->{pass},
+        @error_messages
+    );
 
     #Mark the messages as sent
     for my $uid (@sent_uids) {
@@ -293,13 +300,7 @@ sub checkIncoming {
 }
 
 sub checkOutgoing {
-    #Connect to DB:
-    $dbh = DBI->connect_cached (
-        "DBI:mysql:database=$conf{db_server}",
-        $conf{db_user},
-        $conf{db_pass},
-        {PrintError => 0, RaiseError => 1}
-    );
+    connect_db();
     if (! $dbh ) {
         $logger->error("Could not connect to DB: " . $DBI::errstr);
         return;
@@ -307,14 +308,19 @@ sub checkOutgoing {
 
     #Check the database for messages to send:
     my $messages_ref = $dbh->selectall_arrayref(
-        "SELECT Messages.uid, Messages.address, AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') AS mail " .
+        "SELECT Messages.uid, Messages.address, AES_DECRYPT(ParsedMail.mail, '$conf->{db}->{key}') AS mail " .
         "FROM Messages INNER JOIN ParsedMail " .
         "WHERE Messages.return_time < NOW() AND Messages.sent_time IS NULL AND Messages.uid = ParsedMail.uid",
         { Slice => {} }
     );
 
     #Send the messages:
-    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'},  @{ $messages_ref } );
+    my @sent_uids = sendMessages(
+        $conf->{smtp}->{server},
+        $conf->{smtp}->{user},
+        $conf->{smtp}->{pass},
+        @{ $messages_ref }
+    );
 
     #Mark the messages as sent
     for my $uid (@sent_uids) {
@@ -329,13 +335,7 @@ sub checkOutgoing {
 }
 
 sub archiveMessages {
-    #Connect to DB:
-    $dbh = DBI->connect_cached (
-        "DBI:mysql:database=$conf{db_server}",
-        $conf{db_user},
-        $conf{db_pass},
-        {PrintError => 0, RaiseError => 1}
-    );
+    connect_db();
     if (! $dbh ) {
         $logger->error("Could not connect to DB: " . $DBI::errstr);
         return;
@@ -376,6 +376,15 @@ sub archiveMessages {
         my $deleted = $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
         $deleted += 0; #force numeric context;
 
+        #Collect tails of log files
+        my $incoming_log_file = $log_file;
+        $incoming_log_file =~ s/archive/incoming/;
+        my $incoming_log = get_tail($incoming_log_file);
+
+        my $outgoing_log_file = $log_file;
+        $outgoing_log_file =~ s/archive/outgoing/;
+        my $outgoing_log = get_tail($outgoing_log_file);
+
         #Prepare report
         my $report =<<"END_REPORT";
 In the last 24 hours,
@@ -383,6 +392,12 @@ Messages Received: $received
 Messages Sent    : $sent
 Messages Archived: $archived
 Messages Deleted : $deleted
+
+Incoming Log File:
+$incoming_log
+
+Outgoing Log File:
+$outgoing_log
 END_REPORT
 
         #Send report
@@ -399,15 +414,30 @@ sub mailAdmin {
     my $subject = shift;
     my $text = shift;
 
+    my $mail =<<"END_MAIL";
+To: $conf->{general}->{admin_address}
+From: $conf->{smtp}->{user}
+Subject: $subject
+
+$text
+
+
+END_MAIL
+
     #Create the message:
     my %message = (
-	mail => "To: $conf{admin_address}\nFrom: $conf{smtp_user}\nSubject: $subject\n\n$text\n\n",
-	address => $conf{admin_address},
+	mail => $mail,
+	address => $conf->{general}->{admin_address},
         uid => 'mailadmin',
 	);
 
     #Send the message:
-    my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user', 'smtp_pass'}, \%message);
+    my @sent_uids = sendMessages(
+        $conf->{smtp}->{server},
+        $conf->{smtp}->{user},
+        $conf->{smtp}->{pass},
+        \%message
+    );
 
     #Log any errors:
     $logger->error("Failed to mail admin: $text") unless (@sent_uids);
@@ -418,14 +448,51 @@ sub quit {
     $logger->info('Caught SIGTERM, exiting.');
 
     #Disconnect from DB:
-    $dbh->disconnect();
+    $dbh->disconnect() if $dbh;
 
     #Remove PID file
     unlink($pid_file);
 
-    #Exit
     exit 0;
 }
+
+sub connect_db {
+    $dbh = DBI->connect_cached (
+        "DBI:mysql:database=$conf->{db}->{server}",
+        $conf->{db}->{user},
+        $conf->{db}->{pass},
+        {PrintError => 0, RaiseError => 1}
+    );
+}
+
+sub read_conf {
+    #Read conf file
+    open (my $in, '<', $conf_file) or die "Can't open $conf_file: $!\n";
+    my $conf_file_str = do {
+        local $/;
+        <$in>;
+    };
+    close $in;
+
+    #Decrypt conf file
+    $conf_file_str = decrypt($key,$conf_file_str);
+
+    #Process conf file
+    $conf = Config::Tiny->read_string( $conf_file_str );
+}
+
+sub get_tail {
+    my $file_name = shift;
+    open(my $in,"tail $file_name |") or die "$!\n";
+    my $file = do {
+        local $/;
+        <$in>;
+    };
+    close $in;
+    return $file;
+}
+
+__END__
 
 =head1 NAME
 
@@ -466,5 +533,9 @@ Proc::Daemon
 =item *
 
 DBI
+
+=item *
+
+Config::Tiny
 
 =back

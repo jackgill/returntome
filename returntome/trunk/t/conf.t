@@ -7,10 +7,7 @@ use warnings;
 
 use Test::More tests => 2;
 
-BEGIN {
-    use_ok('Mod::Conf');
-}
-
+use_ok('Mod::Conf') or exit;
 
 my %conf_expected = (
           'db_user' => 'root',
