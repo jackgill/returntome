@@ -1,50 +1,91 @@
 #!/usr/bin/perl
 
-use 5.010;
-
 use strict;
 use warnings;
 
 use Test::More tests => 4;
-use Smart::Comments;
+use Test::MockObject;
+use Config::Tiny;
+use R2M::Crypt;
 
-use Mod::Test;
-use Mod::Conf;
+$INC{'Log/Log4perl.pm'} = 1;
 
-BEGIN {
-    use_ok('Mod::SendMail');
-    use_ok('Mod::GetMail');
-}
+#Mock Log::Log4perl
+my $logger = Test::MockObject->new();
+$logger->fake_module(
+    'Log::Log4perl',
+    get_logger => sub {$logger},
+    );
+$logger->mock('error',
+            sub {
+                my ($self, $text) = @_;
+                print "\$logger->error($text)\n";
+            }
+        );
 
-#Initalize logger:
-Log::Log4perl::init('conf/log4perl_test.conf');
+use_ok('R2M::Mail');
 
-#Read conf variables:
-my %conf = %{ getConf('conf/test.conf','foo') };
+#Read conf file
+my $conf_file  = "conf/talaria.conf";
+my $key = 'foo';
+open (my $in, '<', $conf_file) or die "Can't open $conf_file: $!\n";
+my $conf_file_str = do {
+    local $/;
+    <$in>;
+};
+close $in;
 
-#Clear inbox:
-getMail( @conf{'imap_server', 'imap_user', 'imap_pass'} );
+#Decrypt conf file
+$conf_file_str = decrypt($key, $conf_file_str);
 
-#Create messages:
-my @sent_messages = createMessages(2, 2, 'return.to.me.receive@gmail.com');
+#Process conf file
+my $conf = Config::Tiny->read_string( $conf_file_str );
 
-#Send messages:
-my @sent_uids = sendMessages(@conf{'smtp_server', 'smtp_user' , 'smtp_pass'}, @sent_messages);
+my $address = 'return.to.me.receive@gmail.com';
+my $subject = 'test message ' . time;
+#Clear inbox
+get_mail(
+    $conf->{imap}->{server},
+    $address,
+    $conf->{imap}->{pass},
+);
 
-is(scalar @sent_uids, 2, 'Send Messages');
+#Create message
+my $mail=<<"END_MAIL";
+To: $address
+From: $conf->{smtp}->{user}
+Subject: $subject
 
-#Wait:
-for (my $i = 0; $i < 15; $i++) { ### Waiting...  done
-    sleep 1;
-}
-print "\n";
+This is the body of the message
 
-#Get messages:
-my @got_messages = getMail( @conf{'imap_server', 'imap_user', 'imap_pass'} );
 
-is(scalar @got_messages, 2, 'Received Messages');
+END_MAIL
 
-for my $message (@got_messages) {
-    #print $message;
-    #print "\n",'-' x 78,"\n";
-}
+my %message = (
+    mail => $mail,
+    address =>  $address,
+    uid => 'test',
+);
+
+#Send message
+my @sent_uids = send_mail(
+        $conf->{smtp}->{server},
+        $conf->{smtp}->{user},
+        $conf->{smtp}->{pass},
+        \%message
+    );
+
+is($sent_uids[0], 'test', 'Send Message');
+
+sleep 10;
+
+#Check mail
+my @got_messages = get_mail(
+    $conf->{imap}->{server},
+    $address,
+    $conf->{imap}->{pass},
+);
+
+#See if we received the right message
+is(scalar @got_messages, 1, 'Received 1 Message');
+like($got_messages[0], qr/Subject: $subject/, "...and it's the right one");

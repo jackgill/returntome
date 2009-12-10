@@ -9,7 +9,7 @@ use Test::More tests => 15;
 use DateTime;
 
 #1
-use_ok('R2M::ParseMail') or exit;
+use_ok('R2M::Parse') or exit;
 
 my @tests;
 my ($instructions, $time, $expected, $got, $dt);

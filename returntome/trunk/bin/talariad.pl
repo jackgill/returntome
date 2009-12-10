@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 
-#pragmas
 use 5.010;
 use strict;
 use warnings;
@@ -8,13 +7,10 @@ use warnings;
 use Proc::Daemon;
 use DBI;
 use Config::Tiny;
-
-use Mod::TieSTDERR;
-use Mod::TieSTDOUT;
-use Mod::Crypt;
-use Mod::GetMail;
-use Mod::SendMail;
-use Mod::ParseMail;
+use R2M::TieSTDERR;
+use R2M::Crypt;
+use R2M::Mail;
+use R2M::Parse;
 
 #Determine mode:
 die "Usage: $0 (incoming|outgoing|archive)\n" unless (scalar @ARGV == 1);
@@ -52,7 +48,7 @@ if (-e $pid_file) {
 }
 
 #Get encryption key for conf file
-my $key = getCheckedKey($key_digest);
+my $key = get_checked_key($key_digest);
 
 #Configuration options represented as Config::Tiny object
 my $conf;
@@ -83,7 +79,7 @@ $logger->info("Started talariad.pl, PID: $$");
 
 #Send output streams to logger:
 tie(*STDERR, 'Mod::TieSTDERR');
-tie(*STDOUT, 'Mod::TieSTDOUT');
+tie(*STDOUT, 'Mod::TieSTDERR');
 
 #create PID file:
 if ( open(my $out, '>', $pid_file) ) {
@@ -167,7 +163,7 @@ sub checkIncoming {
     my $db_key = $conf->{db}->{key};
 
     #Check for new messages:
-    my @mail = getMail(
+    my @mail = get_mail(
         $conf->{imap}->{server},
         $conf->{imap}->{user},
         $conf->{imap}->{pass},
@@ -278,7 +274,7 @@ sub checkIncoming {
     }
 
     #Return messages for which there was an error to the sender:
-    my @sent_uids = sendMessages(
+    my @sent_uids = send_mail(
         $conf->{smtp}->{server},
         $conf->{smtp}->{user},
         $conf->{smtp}->{pass},
@@ -315,7 +311,7 @@ sub checkOutgoing {
     );
 
     #Send the messages:
-    my @sent_uids = sendMessages(
+    my @sent_uids = send_mail(
         $conf->{smtp}->{server},
         $conf->{smtp}->{user},
         $conf->{smtp}->{pass},
@@ -432,7 +428,7 @@ END_MAIL
 	);
 
     #Send the message:
-    my @sent_uids = sendMessages(
+    my @sent_uids = send_mail(
         $conf->{smtp}->{server},
         $conf->{smtp}->{user},
         $conf->{smtp}->{pass},

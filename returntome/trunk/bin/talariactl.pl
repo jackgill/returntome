@@ -1,11 +1,10 @@
 #!/usr/bin/perl
 
 use 5.010;
-
 use strict;
 use warnings;
 
-use Mod::Crypt;
+use R2M::Crypt;
 
 if (scalar @ARGV != 1) {
     die "Usage: $0 (start|stop|restart)\n";
@@ -13,19 +12,14 @@ if (scalar @ARGV != 1) {
 
 given($ARGV[0]) {
     when ('start') {
-        my $key = getCheckedKey('conf/key_digest.conf');
+        my $key = get_checked_key('conf/key_digest.conf');
 
-        open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
-        system 'bin/talariad.pl incoming';
-        close STDIN;
-
-        open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
-        system 'bin/talariad.pl outgoing';
-        close STDIN;
-
-        open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
-        system 'bin/talariad.pl archive';
-        close STDIN;
+        my @modes = qw (incoming outgoing archive);
+        for my $mode (@modes) {
+            open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
+            system "bin/talariad.pl archive";
+            close STDIN;
+        }
     }
     when ('stop') {
         my @pids = get_pids();
@@ -40,25 +34,37 @@ given($ARGV[0]) {
 }
 
 sub get_pids {
-    open(my $in,'<','talariad_incoming.pid') or die "Couldn't open talaria_incoming.pid: $!\n";
-    my $pid_incoming = <$in>;
-    close $in;
+    my @pids;
+    my @files = qw(talariad_incoming.pid talariad_outgoing.pid talariad_archive.pid);
 
-    open($in,'<','talariad_outgoing.pid') or die "Couldn't open talaria_outgoing.pid: $!\n";
-    my $pid_outgoing = <$in>;
-    close $in;
+    for my $file (@files) {
+        open(my $in, '<', $file) or die "Couldn't open $file $!\n";
+        my $pid = <$in>;
+        close $in;
+        push @pids, $pid;
+    }
 
-    open($in,'<','talariad_archive.pid') or die "Couldn't open talaria_archive.pid: $!\n";
-    my $pid_archive = <$in>;
-    close $in;
-
-    return ($pid_incoming, $pid_outgoing, $pid_archive);
+    return @pids;
 }
 
 =head1 NAME
 
+talariactl.pl
+
 =head1 USAGE
+
+C<talariactl.pl (start|stop|restart)>
 
 =head1 DESCRIPTION
 
+Start, stop, or restart all 3 Talaria daemons.
+
 =head1 DEPENDENCIES
+
+=over
+
+=item *
+
+R2M::Crypt
+
+=back

@@ -1,4 +1,4 @@
-package Mod::ParseMail;
+package R2M::Parse;
 
 #pragmas
 use 5.010;
@@ -12,15 +12,14 @@ use Log::Log4perl;
 use MIME::Parser;
 use Date::Manip;
 use DateTime;
-
-use Mod::Ad;
+use R2M::Ad;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(parseMail parseInstructions fromEpoch);
+our @EXPORT = qw(parse_mail parseInstructions fromEpoch);
 
 my $logger = Log::Log4perl->get_logger();
 
-sub parseMail {
+sub parse_mail {
     my ($raw_mail, $from_address, $uid) = @_;
 
     #Create the parser:
@@ -267,8 +266,13 @@ sub fromEpoch {
     return unless $epoch;
 
     #TODO: more input validation?
-
-    my $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
+    my $dt;
+    eval {
+        $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
+    };
+    if ($@) {
+        $logger->error("R2M::Parse::fromEpoch: $@");
+    }
     return $dt->ymd . " " . $dt->hms;
 }
 
@@ -276,11 +280,11 @@ sub fromEpoch {
 
 =head1 NAME
 
-Mod::ParseMail -- parses emails.
+R2M::Parse -- parses emails.
 
 =head1 SYNOPSIS
 
-C<my %message = %{ &parseMail($raw_message, $from, $uid) };>
+C<my %message = %{ parse_mail($raw_message, $from, $uid) };>
 
 =head1 DESCRIPTION
 
@@ -292,7 +296,7 @@ Parses emails.
 
 =item *
 
-B<parseMail>
+B<parse_mail>
 
 Extract the return time from the email.
 Add error messages or ads as necessary.

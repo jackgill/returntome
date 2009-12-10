@@ -17,7 +17,7 @@ sub get_mail {
     my $logger = Log::Log4perl->get_logger();
 
     if ( !($server && $user && $pass) ) {
-	$logger->error("GetMail did not receive necessary arguments.");
+	$logger->error("Mail::get_mail did not receive necessary arguments.");
 	return;
     }
 

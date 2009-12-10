@@ -1,6 +1,4 @@
-package Mod::TieSTDERR;
-
-use 5.010;
+package R2M::TieSTDERR;
 
 use strict;
 use warnings;
@@ -25,7 +23,7 @@ sub PRINT {
 
 =head1 NAME
 
-Mod::TieSTDERR
+R2M::TieSTDERR
 
 =head1 SYNOPSIS
 
