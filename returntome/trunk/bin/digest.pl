@@ -7,7 +7,7 @@ use warnings;
 
 use Digest::SHA qw(sha1_base64);
 
-use Mod::Crypt;
+use R2M::Crypt;
 
 #User input:
 if (@ARGV != 1) {
@@ -42,4 +42,10 @@ Calculate the SHA1 digest of a given encryption key.
 
 =head1 DEPENDENCIES
 
-Mod::Crypt
+=over
+
+=item *
+
+R2M::Crypt
+
+=back

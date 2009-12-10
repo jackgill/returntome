@@ -1,4 +1,4 @@
-package Mod::Ad;
+package R2M::Ad;
 
 use 5.010;
 
@@ -10,7 +10,7 @@ use Exporter;
 use LWP::Simple;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(&getHTMLAd &getPlainAd);
+our @EXPORT = qw(getHTMLAd getPlainAd);
 
 sub getHTMLAd {
 
@@ -32,24 +32,22 @@ sub getPlainAd {
 
 =head1 NAME
 
-Mod::Ad
+R2M::Ad -- Provide plain text and html ads.
 
 =head1 SYNOPSIS
 
-    my $plain_ad = getPlainAd;
-    my $html_ad = getHTMLAd;
+C<my $plain_ad = getPlainAd();>
+C<my $html_ad  = getHTMLAd();>
 
 =head1 DESCRIPTION
 
-This module provides ads.
+This module is mostly a placeholder for now.
 
 =head1 SUBROUTINES
 
 =over
 
-=item *
-
-getHTMLAd
+=item B<getHTMLAd>
 
 Get an HTML ad. Currently this is subroutine contacts the Perl Community Ad server for an ad.
 
@@ -65,11 +63,9 @@ An HTML ad.
 
 =back
 
-=item *
+=item B<getPlainAd>
 
-getPlainAd
-
-Get a plain text ad. Currently this is a dummy subroutine.
+Get a plain text ad. Currently this is a dummy subroutine, returning 'your ad here'.
 
 I<Arguments:> None.
 

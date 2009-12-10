@@ -7,11 +7,10 @@ use warnings;
 
 use Test::More tests => 4;
 
-BEGIN {
-    use_ok('Mod::Crypt');
-}
+use_ok('Mod::Crypt') or exit;
 
-open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
+
+open(STDIN,'echo foo |') or BAIL_OUT("Couldn't open STDIN: $!");
 #my $key = getCheckedKey('conf/key_digest.conf');
 my $key = getKey();
 close STDIN;

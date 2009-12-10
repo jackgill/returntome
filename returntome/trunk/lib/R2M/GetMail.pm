@@ -6,8 +6,8 @@ use strict;
 use Exporter;
 use Net::IMAP::Simple::SSL;
 
-our @ISA = ("Exporter");
-our @EXPORT = qw(&getMail);
+our @ISA = qw(Exporter);
+our @EXPORT = qw(getMail);
 
 sub getMail {
     my ($server, $user, $pass, $keep) = @_;
@@ -28,7 +28,7 @@ sub getMail {
     }
 
     #Log in to the IMAP server
-    if( !$imap->login( $user => $pass ) ) {
+    if( !$imap->login($user, $pass) ) {
 	$logger->error("Could not login to IMAP server: " . $imap->errstr);
 	return;
     }

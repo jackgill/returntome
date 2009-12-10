@@ -37,9 +37,6 @@ given($mode) {
     }
 }
 
-
-
-
 #Create the MIME::Lite message
 my $dt = DateTime->from_epoch( epoch => time, time_zone => 'America/Denver');
 my $date = $dt->hms . " " . $dt->mdy;
@@ -94,6 +91,7 @@ $smtp->quit;
 unlink $tarball;
 
 print "Backup successful.\n";
+
 __END__
 
 =head1 NAME

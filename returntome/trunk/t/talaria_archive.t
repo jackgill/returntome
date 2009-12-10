@@ -8,8 +8,8 @@ use warnings;
 use Test::More tests => 8;
 use DBI;
 
-use Mod::Test;
-use Mod::ParseMail;
+use R2M::Test;
+use R2M::ParseMail;
 
 #Populate DB
 my $dbh = DBI->connect(

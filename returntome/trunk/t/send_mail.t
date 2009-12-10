@@ -5,13 +5,13 @@ use 5.010;
 use strict;
 use warnings;
 
-use Test::More tests => 29;
+use Test::More tests => 27;
 use Test::MockObject;
 
 $INC{'Net/SMTP/SSL.pm'} = 1; #prevent Net::SMTP::SSL from being loaded
 $INC{'Log/Log4perl.pm'} = 1; #prevent Log::Log4perl from being loaded
 
-use_ok('Mod::SendMail') or exit;
+use_ok('R2M::Mail') or exit;
 
 #Define SMTP authentication credentials
 my $server = 'smtp.gmail.com';
@@ -56,7 +56,7 @@ $smtp->mock('auth',
             }
         );
 
-$smtp->set_true(qw(mail to data datasend dataend -quit));
+$smtp->set_true(qw(mail to data datasend dataend quit));
 
 #Mock Log::Log4perl
 my $logger = Test::MockObject->new();
@@ -106,7 +106,7 @@ my %message = (
     );
 
 #Send message using mocked Net::SMTP::SSL object
-my @sent_uids = sendMessages($server,$from_address,$password,\%message);
+my @sent_uids = send_mail($server,$from_address,$password,\%message);
 
 is_deeply(\@sent_uids, [$uid], 'UID of sent message is returned');
 
@@ -142,32 +142,31 @@ is($method   , 'dataend'           , 'End data transfer'                );
 ($method, $args) = $smtp->next_call();
 is($method   , 'message'           , 'Check SMTP server response'       );
 
+($method, $args) = $smtp->next_call();
+is($method   , 'quit'              , 'Close connection to server'       );
+
 #Check that errors are logged
-@sent_uids = sendMessages('smtp.wrong.domain',$from_address,$password,\%message);
+@sent_uids = send_mail('smtp.wrong.domain',$from_address,$password,\%message);
 ($method, $args) = $logger->next_call();
 is($method   ,'error'                           , 'Error logged for failed connection');
 is($args->[1],'Could not connect to SMTP server', '...logged appropriate message'     );
 is(scalar @sent_uids, 0, '...no UIDs returned');
 
-@sent_uids = sendMessages('smtp.gmail.com',$from_address,'wrong password',\%message);
+@sent_uids = send_mail('smtp.gmail.com',$from_address,'wrong password',\%message);
 ($method, $args) = $logger->next_call();
 is($method   ,'error'                                , 'Error logged for failed authentication');
 is($args->[1],'Could not authenticate to SMTP server', '...logged appropriate message'         );
 is(scalar @sent_uids, 0, '...no UIDs returned');
 
 $accepted = 0;
-@sent_uids = sendMessages('smtp.gmail.com',$from_address,$password,\%message);
+@sent_uids = send_mail('smtp.gmail.com',$from_address,$password,\%message);
 ($method, $args) = $logger->next_call();
 is($method   , 'error'                    , 'Error logged for SMTP server not accepting message');
-is($args->[1], "Did not send message $uid", '...logged appropriate message'                     );
+is($args->[1], "Did not send message $uid: DENIED", '...logged appropriate message'                     );
 ($method, $args) = $logger->next_call();
-is($method   , 'error'                    , 'Error logged for SMTP server not accepting message');
-is($args->[1], $error_response, '...logged SMTP response'                     );
-is(scalar @sent_uids, 0, '...no UIDs returned');
-$accepted = 1;
 
 $message{address} = '';
-@sent_uids = sendMessages('smtp.gmail.com',$from_address,$password,\%message);
+@sent_uids = send_mail('smtp.gmail.com',$from_address,$password,\%message);
 ($method, $args) = $logger->next_call();
 is($method   , 'error'                    , 'Error logged for null address field in message hash');
 is($args->[1], "Address is null for message $uid.", '...logged appropriate message'                     );

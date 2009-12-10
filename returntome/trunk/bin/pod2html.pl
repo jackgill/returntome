@@ -10,7 +10,7 @@ use Pod::Simple::HTMLBatch;
 #TODO: roll my own index page to separate programs from modules
 
 my $batchconv = Pod::Simple::HTMLBatch->new;
-my @search_dirs = qw(Mod bin);
+my @search_dirs = qw(lib/R2M bin);
 my $output_dir = 'doc';
 my $html_start = <<'END_HTML';
 <html>
@@ -30,12 +30,18 @@ makeDoc.pl
 
 =head1 USAGE
 
-C<bin/makeDoc.pl>
+C<bin/pod2html.pl>
 
 =head1 DESCRIPTION
 
-This script translates all POD in the Mod and bin subdirectories to html.
+This script translates all POD in the lib/R2M and bin subdirectories to html.
 
 =head1 DEPENDENCIES
 
+=over
+
+=item *
+
 Pod::Simple::HTMLBatch
+
+=back
