@@ -8,17 +8,18 @@ use warnings;
 use MIME::Lite;
 use DateTime;
 use Net::SMTP::SSL;
+use Net::SSH qw(sshopen2);
 
-die "Usage: $0 (working_copy|repository)\n" unless (scalar @ARGV == 1);
+die "Usage: $0 (snapshot|repository)\n" unless (scalar @ARGV == 1);
 
 my $mode = $ARGV[0];
-my $tarball;
+my $file;
 my $subject;
 
 given($mode) {
-    when('working_copy') {
+    when('snapshot') {
         #Create a gzipped tarball of the current source code:
-        $tarball = 'trunk.tar.gz';
+        $file = 'trunk.tar.gz';
         $subject = 'Snapshot';
         chdir('..') or die "Couldn't cd ..\n";
         system 'tar -cf trunk.tar trunk';
@@ -27,10 +28,17 @@ given($mode) {
         chdir('trunk') or die "Couldn't cd to trunk\n"
     }
     when('repository') {
-        $tarball = 'repository.gz';
+        $file = 'repository.gz';
         $subject = 'Backup';
-        system "svnadmin dump --quiet svn > repository";
-        system "gzip repository";
+        sshopen2('rtmadmin@rtmserver', *READER, *WRITER, 'svnadmin dump --quiet svn | gzip') || die "ssh: $!";
+
+        open(my $out, '>', $file) or die "Couldn't open $file: $!\n";
+        while (<READER>) {
+            print $out $_;
+        }
+        close(READER);
+        close(WRITER);
+        close $out;
     }
     default {
 	die "Invalid mode: $mode\n";
@@ -50,8 +58,8 @@ my $mime = MIME::Lite->new(
 #Attach the tarball
 $mime->attach(
     Type         => 'application/x-gzip',
-    Path        => $tarball,
-    Filename    => $tarball,
+    Path        => $file,
+    Filename    => $file,
     Disposition => 'attachment'
    );
 
@@ -88,7 +96,7 @@ unless ($smtp_response =~ /2.0.0 OK/) {
 }
 $smtp->quit;
 
-unlink $tarball;
+unlink $file;
 
 print "Backup successful.\n";
 
@@ -96,31 +104,27 @@ __END__
 
 =head1 NAME
 
-backup.pl
+backup.pl -- Create a backup, and mail it to a gmail account.
 
 =head1 USAGE
 
-C<bin/snapshot.pl (working_copy|repository)>
+C<bin/backup.pl (snapshot|repository)>
 
 =head1 DESCRIPTION
 
-Create a gzipped tarball, and mail it to a gmail account which stores backups.
+A 'snapshot' backup  A 'repository' backup  In either case, the gzipped file is then mailed as an attachment to the gmail backup accoun.t
 
 Mode:
 
 =over
 
-=item *
+=item B<snapshot>
 
-working_copy
+Creates a gzipped tarball of the trunk of the local working copy.
 
-Make a tarball of the current working copy.
+=item B<repository>
 
-=item *
-
-repository
-
-Make a tarball of the entire repository.
+ssh's into the subversion repository host, dumps the repository as a plain text file and pipes it through gzip.
 
 =back
 
@@ -139,5 +143,9 @@ DateTime
 =item *
 
 Net::SMTP::SSL
+
+=item *
+
+Net::SSH
 
 =back
