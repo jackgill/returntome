@@ -4,13 +4,13 @@ use 5.010;
 
 use strict;
 use warnings;
-use lib '..';
-use Mod::ParseMail;
+use lib '../lib';
+use R2M::ParseMail;
 
 use CGI qw/:standard/;
 use CGI::Carp qw(fatalsToBrowser); #send errors to browser as well as server error log
 
-print 
+print
     header,
     start_html('R2M'),
     h1('Date Parser Test'),
@@ -22,15 +22,12 @@ print
 
 if (param) {
     my $input = param('name');
-    print "Input:  ",$input,".<br>";
-    my $epoch = &parseInstructions($input);
-    my $output;
-    if ($epoch) {
-	$output = &fromEpoch($epoch);    
-    } else {
-	$output = "error";
+    print "Input:  $input <br>";
+    my $output = parseInstructions($input);
+    if (!$output) {
+	$output = "Error";
     }
-    print "Output: ",$output,".\n";
+    print "Output: $output\n";
 }
 
 print end_html;

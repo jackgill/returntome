@@ -8,6 +8,7 @@ use warnings;
 use Pod::Simple::HTMLBatch;
 
 #TODO: roll my own index page to separate programs from modules
+system "rm doc/*.html";
 
 my $batchconv = Pod::Simple::HTMLBatch->new;
 my @search_dirs = qw(lib/R2M bin);

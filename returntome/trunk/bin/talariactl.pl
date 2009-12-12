@@ -14,30 +14,26 @@ given($ARGV[0]) {
     when ('start') {
         my $key = get_checked_key('conf/key_digest.conf');
 
-        my @modes = qw (incoming outgoing archive);
-        for my $mode (@modes) {
-            open(STDIN, "echo '$key' |") or die "Couldn't open STDIN: $!\n";
-            system "bin/talariad.pl archive";
+        open(STDOUT, '>', '/dev/null'  ) or die "Couldn't open STDOUT: $!\n";
+        for my $mode (qw (incoming outgoing archive)) {
+            open(STDIN , "echo '$key' |") or die "Couldn't open STDIN: $!\n";
+            system "bin/talariad.pl $mode";
             close STDIN;
         }
+        close STDOUT;
     }
     when ('stop') {
-        my @pids = get_pids();
-
-        kill 'SIGTERM', @pids;
+        kill 'SIGTERM', get_pids();
     }
     when ('restart') {
-        my @pids = get_pids();
-
-        kill 'SIGHUP', @pids;
+        kill 'SIGHUP', get_pids();
     }
 }
 
 sub get_pids {
     my @pids;
-    my @files = qw(talariad_incoming.pid talariad_outgoing.pid talariad_archive.pid);
 
-    for my $file (@files) {
+    for my $file (qw(talariad_incoming.pid talariad_outgoing.pid talariad_archive.pid)) {
         open(my $in, '<', $file) or die "Couldn't open $file $!\n";
         my $pid = <$in>;
         close $in;

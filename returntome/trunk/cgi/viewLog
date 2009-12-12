@@ -31,8 +31,22 @@ print end_html;
 
 =head1 NAME
 
+viewLog -- CGI script to display talariad logs.
+
 =head1 USAGE
+
+CGI script.
 
 =head1 DESCRIPTION
 
+Uses cat to display all three log files.
+
 =head1 DEPENDENCIES
+
+=over
+
+=item *
+
+CGI
+
+=back

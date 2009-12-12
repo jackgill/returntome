@@ -10,7 +10,7 @@ use Test::MockObject;
 $INC{'Net::IMAP::Simple::SSL'} = 1;
 $INC{'Log/Log4perl.pm'} = 1;
 
-use_ok('R2M::Mail');
+use_ok('R2M::Mail') or exit;
 
 #Define IMAP authentication credentials
 my $server = 'imap.domain.tld';

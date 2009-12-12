@@ -8,9 +8,9 @@ use DBI;
 use CGI qw(:standard *table); #function based interface to CGI module, start_table and end_table tags
 use CGI::Carp qw(fatalsToBrowser); #send errors to browser as well as server error log
 
-use lib '..';
-use Mod::Conf;
-use Mod::Crypt;
+use lib '../lib';
+use R2M::Conf;
+use R2M::Talaria;
 
 #Make the webpage:
 print header, start_html('Return To Me');
@@ -43,25 +43,31 @@ sub displayTable {
 
     #Read conf file:
     my $conf_file = '../conf/talaria.conf';
-    my %conf = getConf($conf_file, $key);
+    my $conf = read_conf($conf_file, $key);
 
-    unless (%conf) {
-        print h4('Invalid decryption key.');
-        return;
-    }
+    #unless (%conf) {
+    #    print string('Invalid decryption key.'), br;
+    #    return;
+    #}
 
     #Connect to DB:
-    my $dbh = DBI->connect(
-        "DBI:mysql:database=$conf{db_server}",
-        $conf{db_user},
-        $conf{db_pass},
-        {PrintError => 0, RaiseError => 1}
+    my $dbh = connect_db($conf);
+    if (!$dbh) {
+        print strong("Error connecting to database: $DBI::errstr"), br;
+        return;
+    }
+    my $db_key = $conf->{db}->{key};
+    my $table_ref = $dbh->selectall_arrayref(
+        "SELECT Messages.uid, address, received_time, return_time, sent_time, AES_DECRYPT(RawMail.mail, '$db_key'), AES_DECRYPT(ParsedMail.mail, '$db_key') ".
+        "FROM Messages INNER JOIN ParsedMail INNER JOIN RawMail ".
+        "WHERE Messages.uid = ParsedMail.uid AND Messages.uid = RawMail.uid"
     );
-
-    my $table_ref = $dbh->selectall_arrayref("SELECT Messages.uid, Messages.address, Messages.received_time, Messages.return_time, Messages.sent_time, AES_DECRYPT(RawMail.mail, '$conf{db_key}'), AES_DECRYPT(ParsedMail.mail, '$conf{db_key}') FROM Messages INNER JOIN ParsedMail INNER JOIN RawMail WHERE Messages.uid = ParsedMail.uid AND Messages.uid = RawMail.uid");
     print_table($table_ref,'Active Messages');
 
-    $table_ref = $dbh->selectall_arrayref("SELECT uid, address, received_time, return_time, sent_time, AES_DECRYPT(raw_mail, '$conf{db_key}'), AES_DECRYPT(parsed_mail, '$conf{db_key}') FROM Archive");
+    $table_ref = $dbh->selectall_arrayref(
+        "SELECT uid, address, received_time, return_time, sent_time, AES_DECRYPT(raw_mail, '$db_key'), AES_DECRYPT(parsed_mail, '$db_key') " .
+        "FROM Archive"
+    );
     print_table($table_ref,'Archive');
 
     $dbh->disconnect();
