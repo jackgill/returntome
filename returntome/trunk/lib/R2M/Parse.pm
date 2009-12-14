@@ -156,10 +156,10 @@ sub parse_mail {
     if ($error_message) {
         $return_time = undef; #to guarantee immediate return
 	unshift @plain_lines, $error_message . "\n\n";
-	unshift @html_lines, "<b>" . $error_message . "</b><br><br>\n\n";
+	unshift @html_lines, "\n<b>" . $error_message . "</b><br><br>\n\n";
     } else {
 	unshift @plain_lines, getPlainAd() . "\n\n";
-	unshift @html_lines, getHTMLAd() . ("-" x 70) . "<br><br>";
+	unshift @html_lines, getHTMLAd() . "\n<br>\n" . ("-" x 70) . "\n<br><br>\n";
     }
 
     #Write the modified message:

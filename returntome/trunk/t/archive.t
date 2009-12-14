@@ -7,6 +7,7 @@ use warnings;
 
 use Test::More tests => 8;
 use Test::MockObject;
+use Test::MockModule;
 use DBI;
 use R2M::Parse;
 use R2M::Conf;
@@ -31,6 +32,7 @@ $R2M_Mail->mock(
         return ();
         }
 );
+my @sent_args;
 $R2M_Mail->mock(
     send_mail => sub{
         @sent_args = @_;

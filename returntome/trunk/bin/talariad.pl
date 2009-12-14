@@ -9,6 +9,7 @@ use Proc::Daemon;
 use DBI;
 use R2M::TieSTDERR;
 use R2M::Conf;
+use R2M::Crypt;
 use R2M::Talaria;
 
 #Determine mode:
@@ -76,8 +77,8 @@ my $logger = Log::Log4perl->get_logger();
 $logger->info("Started talariad.pl, PID: $$");
 
 #Send output streams to logger:
-tie(*STDERR, 'Mod::TieSTDERR');
-tie(*STDOUT, 'Mod::TieSTDERR');
+tie(*STDERR, 'R2M::TieSTDERR');
+tie(*STDOUT, 'R2M::TieSTDERR');
 
 #create PID file:
 if ( open(my $out, '>', $pid_file) ) {
@@ -87,6 +88,7 @@ if ( open(my $out, '>', $pid_file) ) {
 else {
     $logger->error("Couldn't create PID file: $!");
 }
+
 
 my $working = 0; #flag indicating if daemon is executing subroutine
 my $TERM    = 0; #flag indicating if SIGTERM has been received

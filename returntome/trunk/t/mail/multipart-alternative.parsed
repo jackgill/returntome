@@ -1,0 +1,26 @@
+From: return.to.me.test@gmail.com
+To: Jack Gill <address@domain.tld>
+Subject: this is the subject line
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary=0016e6d99bed5b219c0478394fd8
+
+
+--0016e6d99bed5b219c0478394fd8
+Content-Type: text/plain; charset=ISO-8859-1
+
+This is a plain text ad.
+
+R2M: June 6th, 2010
+
+this is the body.
+
+--0016e6d99bed5b219c0478394fd8
+Content-Type: text/html; charset=ISO-8859-1
+
+This is a html ad.
+<br>
+----------------------------------------------------------------------
+<br><br>
+R2M: June 6th, 2010<br><br>this is the body.<br><br>
+
+--0016e6d99bed5b219c0478394fd8--

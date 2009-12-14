@@ -1,4 +1,4 @@
-Delivered-To: return.to.me.receive@gmail.com
+Delivered-To: return.to.me.test@gmail.com
 Received: by 10.90.113.8 with SMTP id l8cs68634agc;
         Thu, 12 Nov 2009 20:44:07 -0800 (PST)
 Return-Path: <return.to.me.test@gmail.com>
@@ -27,18 +27,20 @@ Received: by 10.216.90.138 with SMTP id e10mr201998wef.150.1258087446683; Thu,
 Date: Thu, 12 Nov 2009 21:44:06 -0700
 Message-ID: <770830640911122044m73db6ae2re65fd67eb8472b3f@mail.gmail.com>
 Subject: this is the subject line
-From: Jack Gill <return.to.me.test@gmail.com>
-To: return.to.me.receive@gmail.com
+From: Jack Gill <address@domain.tld>
+To: return.to.me.test@gmail.com
 Content-Type: multipart/alternative; boundary=0016e6d99bed5b219c0478394fd8
 
 --0016e6d99bed5b219c0478394fd8
 Content-Type: text/plain; charset=ISO-8859-1
 
-R2M: November 22nd, 2009
+R2M: June 6th, 2010
 
 this is the body.
 
 --0016e6d99bed5b219c0478394fd8
 Content-Type: text/html; charset=ISO-8859-1
 
-R2M: November 22nd, 2009<br><br>this is the body.<br><br>
+R2M: June 6th, 2010<br><br>this is the body.<br><br>
+
+--0016e6d99bed5b219c0478394fd8--

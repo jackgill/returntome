@@ -143,7 +143,7 @@ sub incoming {
             $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
         };
         if ($@) {
-            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid:");
+            $logger->error("Failed to store sent time " . from_epoch(time) . " for message $uid:");
             $logger->error($DBI::lasth->errstr);
             #TODO: if this statement fails, messages could be sent multiple time
             #fallback: store in memory array of messages we've sent?
@@ -177,7 +177,7 @@ sub outgoing {
             $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
         };
         if ($@) {
-            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid: $DBI::lasth->errstr");
+            $logger->error("Failed to store sent time " . from_epoch(time) . " for message $uid: $DBI::lasth->errstr");
         }
     }
 }
@@ -189,16 +189,16 @@ sub archive {
     eval {
         #Determine how many messages were received in the last 24 hours
         my $received = $dbh->selectrow_array(
-            "SELECT COUNT(*) FROM Messages WHERE received_time > '" . fromEpoch(time - 24*60*60) . "'"
+            "SELECT COUNT(*) FROM Messages WHERE received_time > '" . from_epoch(time - 24*60*60) . "'"
         );
 
         #Determine how many messages were sent in the last 24 hours
         my $sent = $dbh->selectrow_array(
-            "SELECT COUNT(*) FROM Messages WHERE sent_time > '" . fromEpoch(time - 24*60*60) . "'"
+            "SELECT COUNT(*) FROM Messages WHERE sent_time > '" . from_epoch(time - 24*60*60) . "'"
         );
 
         #Retrieve messages to be archived
-        my $archive_time = fromEpoch(time);
+        my $archive_time = from_epoch(time);
         my $messages_ref = $dbh->selectall_arrayref(
             "SELECT Messages.uid, address, received_time, return_time, sent_time, RawMail.mail, ParsedMail.mail " .
             "FROM Messages INNER JOIN ParsedMail INNER JOIN RawMail " .
@@ -217,7 +217,7 @@ sub archive {
         }
 
         #Delete old messages in archive
-        my $delete_time = fromEpoch(time - 7 * 24 * 60 * 60);
+        my $delete_time = from_epoch(time - 7 * 24 * 60 * 60);
         my $deleted = $dbh->do("DELETE FROM Archive WHERE sent_time < '$delete_time'");
         $deleted += 0; #force numeric context;
 
@@ -241,11 +241,11 @@ $outgoing_log
 END_REPORT
 
         #Send report
-        mailAdmin($conf, 'Talaria report ' . fromEpoch(time), $report);
+        mailAdmin($conf, 'Talaria report ' . from_epoch(time), $report);
     };
     if ($@) {
         $logger->error($@);
-        mailAdmin($conf, 'Talaria report ' . fromEpoch(time) , "Error preparing report: $@");
+        mailAdmin($conf, 'Talaria report ' . from_epoch(time) , "Error preparing report: $@");
     }
     #TODO: database maintainance
 }

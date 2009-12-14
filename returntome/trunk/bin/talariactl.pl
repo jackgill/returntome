@@ -33,7 +33,12 @@ given($ARGV[0]) {
 sub get_pids {
     my @pids;
 
+  FILE:
     for my $file (qw(talariad_incoming.pid talariad_outgoing.pid talariad_archive.pid)) {
+        unless (-e $file) {
+            warn "$file is not present\n";
+            next FILE;
+        }
         open(my $in, '<', $file) or die "Couldn't open $file $!\n";
         my $pid = <$in>;
         close $in;
