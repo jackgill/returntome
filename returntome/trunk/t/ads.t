@@ -7,7 +7,7 @@ use warnings;
 
 use Test::More tests => 3;
 
-use_ok('Mod::Ad') or exit;
+use_ok('R2M::Ad') or exit;
 
 #Get ads:
 my $html_ad = &getHTMLAd;

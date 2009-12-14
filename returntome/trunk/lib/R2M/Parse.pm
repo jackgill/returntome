@@ -11,11 +11,11 @@ use Exporter;
 use Log::Log4perl;
 use MIME::Parser;
 use Date::Manip;
-use DateTime;
 use R2M::Ad;
+use Time::localtime;
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(parse_mail parseInstructions fromEpoch);
+our @EXPORT = qw(parse_mail parseInstructions from_epoch);
 
 my $logger = Log::Log4perl->get_logger();
 
@@ -130,12 +130,12 @@ sub parse_mail {
 
 	if ($return_time) { #instructions parsing succeeded
 	    #Check for return dates in the past
-            if ($return_time lt fromEpoch(time)) {
+            if ($return_time lt from_epoch(time)) {
                 $error_message = "You specified a return date in the past.";
             }
 
 	    #Check for return dates too far in the future
-            if ($return_time gt fromEpoch(time + 60 * 60 * 24 * 365)) {
+            if ($return_time gt from_epoch(time + 60 * 60 * 24 * 365)) {
                 $error_message = "Sorry, we do not accept messages with a return date more than a year in the future.";
             }
 	}
@@ -261,19 +261,18 @@ sub parseInstructions {
     return $date;
 }
 
-sub fromEpoch {
+sub from_epoch {
     my $epoch = shift;
     return unless $epoch;
 
-    #TODO: more input validation?
-    my $dt;
-    eval {
-        $dt = DateTime->from_epoch( epoch => $epoch , time_zone => 'America/Denver');
-    };
-    if ($@) {
-        $logger->error("R2M::Parse::fromEpoch: $@");
-    }
-    return $dt->ymd . " " . $dt->hms;
+    my $tm = localtime($epoch);
+    return sprintf("%4u-%02u-%02u %02u:%02u:%02u",
+                   $tm->year + 1900,
+                   $tm->mon + 1,
+                   $tm->mday,
+                   $tm->hour,
+                   $tm->min,
+                   $tm->sec);
 }
 
 1;
@@ -462,10 +461,10 @@ Date::Manip
 
 =item *
 
-DateTime
+Time::localtime
 
 =item *
 
-Mod::Ad
+R2M::Ad
 
 =back

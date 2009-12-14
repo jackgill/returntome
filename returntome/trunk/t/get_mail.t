@@ -77,11 +77,11 @@ is($args->[1], $address   , '...using sending address'    );
 is($args->[2], $password  , '...and password'             );
 
 ($method, $args) = $imap->next_call();
-is($method   , 'select'   , 'Selecting folder'            );
+is($method   , 'select'   , 'Select folder'            );
 is($args->[1], 'INBOX'    , '...which is INBOX'           );
 
 ($method, $args) = $imap->next_call();
-is($method   , 'get'      , 'Retrieving message'          );
+is($method   , 'get'      , 'Retrieve message'          );
 is($args->[1], 1          , '...using its index'          );
 
 ($method, $args) = $imap->next_call();

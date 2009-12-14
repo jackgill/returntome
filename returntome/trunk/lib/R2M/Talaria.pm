@@ -19,7 +19,7 @@ sub incoming {
 
     my $db_key = $conf->{db}->{key};
 
-    #Check for new messages:
+    #Check for new messages
     my @mail = R2M::Mail::get_mail(
         $conf->{imap}->{server},
         $conf->{imap}->{user},
@@ -28,7 +28,7 @@ sub incoming {
 
     my @error_messages; #messages we are going to return immediately
 
-    #Prepare SQL statements:
+    #Prepare SQL statements
     my $create_entry = $dbh->prepare("INSERT INTO Messages VALUES (NULL, ?, NOW(), ?, NULL)");
     my $store_raw    = $dbh->prepare("INSERT INTO RawMail VALUES (?, AES_ENCRYPT(?,?))");
     my $store_parsed = $dbh->prepare("INSERT INTO ParsedMail VALUES (?, AES_ENCRYPT(?,?))");
@@ -49,11 +49,10 @@ sub incoming {
 
         #If UID wasn't created, log it
         if ($@) {
-            $logger->error("Couldn't create UID.");
-            $logger->error($DBI::lasth->errstr);
+            $logger->error("Couldn't create UID: $DBI::lasth->errstr");
             $logger->error("Message follows:");
             my $encrypted_mail = encrypt($db_key, $raw_mail);
-            $logger->error($encrypted_mail);
+            $logger->error("\n$encrypted_mail\n");
             next MAIL;
         };
 
@@ -178,8 +177,7 @@ sub outgoing {
             $dbh->do("UPDATE Messages SET sent_time = NOW() WHERE uid = '$uid'");
         };
         if ($@) {
-            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid:");
-            $logger->error($DBI::lasth->errstr);
+            $logger->error("Failed to store sent time " . fromEpoch(time) . " for message $uid: $DBI::lasth->errstr");
         }
     }
 }
@@ -243,11 +241,11 @@ $outgoing_log
 END_REPORT
 
         #Send report
-        mailAdmin('Talaria report ' . fromEpoch(time), $report);
+        mailAdmin($conf, 'Talaria report ' . fromEpoch(time), $report);
     };
     if ($@) {
         $logger->error($@);
-        mailAdmin('Talaria report ' . fromEpoch(time) , "Error preparing report: $@");
+        mailAdmin($conf, 'Talaria report ' . fromEpoch(time) , "Error preparing report: $@");
     }
     #TODO: database maintainance
 }

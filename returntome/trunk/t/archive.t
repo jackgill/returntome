@@ -6,19 +6,45 @@ use strict;
 use warnings;
 
 use Test::More tests => 8;
+use Test::MockObject;
 use DBI;
+use R2M::Parse;
+use R2M::Conf;
 
-use R2M::Test;
-use R2M::ParseMail;
-
-#Populate DB
-my $dbh = DBI->connect(
-    "DBI:mysql:database=ReturnToMe",
-    'root',
-    'foo',
-    {PrintError => 0, RaiseError => 1}
+#Mock Log::Log4perl
+$INC{'Log/Log4perl.pm'} = 1;
+my $logger = Test::MockObject->new();
+$logger->fake_module(
+    'Log::Log4perl',
+    get_logger => sub {$logger},
+    );
+$logger->mock('error',
+            sub {
+                my ($self, $text) = @_;
+                print "\$logger->error($text)\n";
+            }
+        );
+#Mock R2M::Mail
+my $R2M_Mail = Test::MockModule->new('R2M::Mail');
+$R2M_Mail->mock(
+    get_mail => sub {
+        return ();
+        }
 );
+$R2M_Mail->mock(
+    send_mail => sub{
+        @sent_args = @_;
+        return (1);
+        }
+);
+use_ok('R2M::Talaria') or exit;
 
+my $conf_file  = 'conf/talaria.conf';
+my $key = 'foo';
+my $conf = read_conf($conf_file, $key);
+my $dbh = connect_db($conf);
+
+#Clear DB
 $dbh->do('TRUNCATE TABLE Messages');
 $dbh->do('TRUNCATE TABLE Archive');
 
@@ -28,32 +54,20 @@ my $RawMail = $dbh->prepare("INSERT INTO RawMail VALUES(?,AES_ENCRYPT('this is s
 my $ParsedMail = $dbh->prepare("INSERT INTO ParsedMail VALUES(?,AES_ENCRYPT('this is some parsed mail','foo'))");
 my $Archive = $dbh->prepare("INSERT INTO Archive VALUES(?,'foo\@bar.com',NOW(),NULL,?,AES_ENCRYPT('this is some raw mail','foo'),AES_ENCRYPT('this is some parsed mail','foo'))");
 
-$Messages->execute(fromEpoch(time - 24 * 60 * 60 - 60), undef,undef);
-$Messages->execute(fromEpoch(time - 300), undef,undef);
-$Messages->execute(fromEpoch(time - 500), undef,fromEpoch(time - 60));
-$Messages->execute(fromEpoch(time - 24 * 60 * 60 + 60), undef,fromEpoch(time - 90));
+$Messages->execute( from_epoch(time - 24 * 60 * 60 - 60), undef, undef);
+$Messages->execute( from_epoch(time - 300)              , undef, undef);
+$Messages->execute( from_epoch(time - 500)              , undef, from_epoch(time - 60));
+$Messages->execute( from_epoch(time - 24 * 60 * 60 + 60), undef, from_epoch(time - 90));
 
 for (my $i = 1; $i < 5; $i++) {
     $RawMail->execute($i);
     $ParsedMail->execute($i);
 }
 
-$Archive->execute(6, fromEpoch(time - 7 *24 * 60 * 60 - 60) );
-$Archive->execute(7, fromEpoch(time - 7 *24 * 60 * 60 + 60) );
+$Archive->execute(6, from_epoch(time - 7 *24 * 60 * 60 - 60) );
+$Archive->execute(7, from_epoch(time - 7 *24 * 60 * 60 + 60) );
 
-#Start talaria
-open(STDIN,'<t/password.txt') or BAIL_OUT("Couldn't open STDIN: $!");
-system 'bin/talariad.pl archive';
-close STDIN;
-
-sleep 5;
-
-#Stop talaria
-open(my $in,'<','talariad_archive.pid') or die "Couldn't open talariad_archive.pid: $!\n";
-my $pid_archive = <$in>;
-close $in;
-
-system "kill -s SIGINT $pid_archive";
+archive($conf, $dbh);
 
 my $message_ref = $dbh->selectall_arrayref("SELECT uid FROM Messages");
 my @message_rows = @{ $message_ref };

@@ -7,20 +7,27 @@ use warnings;
 
 use Test::More tests => 4;
 
-use_ok('Mod::Crypt') or exit;
+use_ok('R2M::Crypt') or exit;
 
-
-open(STDIN,'echo foo |') or BAIL_OUT("Couldn't open STDIN: $!");
-#my $key = getCheckedKey('conf/key_digest.conf');
-my $key = getKey();
+#Test get_key()
+my $exp_key = 'foo';
+open(STDIN, "echo $exp_key |") or die "Couldn't open STDIN: $!\n";
+open(STDOUT, '>', '/dev/null') or die "Couldn't open STDOUT: $!\n";
+my $got_key = get_key();
 close STDIN;
+close STDOUT;
+is($got_key, $exp_key, 'get_key()');
 
-my $plain_text = "This is some plain text.";
-my $encrypted = encrypt($key, $plain_text);
-my $decrypted = decrypt($key, $encrypted);
+#my $key = getCheckedKey('conf/key_digest.conf');
 
-is($key, 'foo', 'Key');
-like($encrypted, qr/Salted_.*/, 'Encrypted');
-is($decrypted, $plain_text, 'Decrypted');
+my $plain_text = 'This is some plain text.';
+
+#Test encrypt()
+my $encrypted = encrypt($exp_key, $plain_text);
+like($encrypted, qr/Salted_.*/, 'encrypt()');
+
+#Test decrypt()
+my $decrypted = decrypt($exp_key, $encrypted);
+is($decrypted, $plain_text, 'decrypt()');
 
 
