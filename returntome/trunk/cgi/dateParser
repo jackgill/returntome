@@ -5,7 +5,7 @@ use 5.010;
 use strict;
 use warnings;
 use lib '../lib';
-use R2M::ParseMail;
+use R2M::Parse;
 
 use CGI qw/:standard/;
 use CGI::Carp qw(fatalsToBrowser); #send errors to browser as well as server error log

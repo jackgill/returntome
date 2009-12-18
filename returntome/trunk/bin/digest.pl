@@ -16,7 +16,7 @@ if (@ARGV != 1) {
 my $file = $ARGV[0];
 
 #Prompt for encryption key
-my $key = getKey;
+my $key = get_key();
 
 #Calculate digest:
 my $digest = &sha1_base64($key);
