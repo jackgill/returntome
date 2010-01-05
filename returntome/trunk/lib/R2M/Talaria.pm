@@ -222,6 +222,8 @@ sub archive {
         $deleted += 0; #force numeric context;
 
         #Collect tails of log files
+        #TODO: hard code absolute file path to log files?
+        #Specify log file location in config file?
         my $incoming_log = get_tail('log/talariad_incoming.log');
         my $outgoing_log = get_tail('log/talariad_outgoing.log');
 

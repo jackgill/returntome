@@ -10,7 +10,7 @@ use bytes;
 use Exporter;
 use Log::Log4perl;
 use MIME::Parser;
-use Date::Manip;
+use Time::ParseDate;
 use R2M::Ad;
 use Time::localtime;
 
@@ -249,16 +249,19 @@ sub writeEntity {
     return 1;
 }
 
+# use Date::Manip;
+# sub parseInstructions {
+#     my $instructions = shift;
+#     my $result = ParseDate($instructions);
+#     return unless $result;
+#     my $date = UnixDate($result,"%Y-%m-%d %T");
+#     return $date;
+# }
+
 sub parseInstructions {
     my $instructions = shift;
-
-    my $result = ParseDate($instructions);
-    return unless $result;
-
-    my $date = UnixDate($result,"%Y-%m-%d %T");
-    #my $epoch = UnixDate($result,"%s");
-
-    return $date;
+    my $epoch = parsedate($instructions, PREFER_FUTURE => 1);
+    return from_epoch($epoch);
 }
 
 sub from_epoch {
