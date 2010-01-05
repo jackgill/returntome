@@ -182,6 +182,10 @@ sub outgoing {
     }
 }
 
+my $old_incoming = "";
+my $old_outgoing = "";
+my $old_archive  = "";
+
 sub archive {
     my ($conf, $dbh) = @_;
     my $logger = Log::Log4perl->get_logger();
@@ -222,32 +226,40 @@ sub archive {
         $deleted += 0; #force numeric context;
 
         #Collect tails of log files
-        #TODO: hard code absolute file path to log files?
-        #Specify log file location in config file?
-        my $incoming_log = get_tail('log/talariad_incoming.log');
-        my $outgoing_log = get_tail('log/talariad_outgoing.log');
+        my $incoming_log = get_tail($conf->{general}->{cwd} . '/log/talariad_incoming.log');
+        my $outgoing_log = get_tail($conf->{general}->{cwd} . '/log/talariad_outgoing.log');
+        my $archive_log  = get_tail($conf->{general}->{cwd} . '/log/talariad_archive.log');
+
+        my $new_log = "";
+        if (
+            ($old_incoming ne $incoming_log) ||
+            ($old_outgoing ne $outgoing_log) ||
+            ($old_archive  ne $archive_log)
+        ) {
+            $new_log = "NEW LOG ENTRIES";
+            $old_incoming = $incoming_log;
+            $old_outgoing = $outgoing_log;
+            $old_archive = $archive_log;
+        }
 
         #Prepare report
         my $report =<<"END_REPORT";
-In the last 24 hours,
-Messages Received: $received
-Messages Sent    : $sent
-Messages Archived: $archived
-Messages Deleted : $deleted
-
 Incoming Log File:
 $incoming_log
 
 Outgoing Log File:
 $outgoing_log
+
+Archive Log File:
+$archive_log
 END_REPORT
 
         #Send report
-        mailAdmin($conf, 'Talaria report ' . from_epoch(time), $report);
+        mailAdmin($conf, 'Talaria: ' . from_epoch(time) . " R: $received S: $sent $new_log", $report);
     };
     if ($@) {
         $logger->error($@);
-        mailAdmin($conf, 'Talaria report ' . from_epoch(time) , "Error preparing report: $@");
+        mailAdmin($conf, 'Talaria: ' . from_epoch(time) . " Error preparing report: $@");
     }
     #TODO: database maintainance
 }
@@ -313,7 +325,7 @@ sub get_tail {
 
 =head1 NAME
 
-R2M::Talaria -- core Talaria routines.
+R2M::Talaria -- Subroutines for the three talariad modes: incoming, outgoing, and archive.
 
 =head1 SYNOPSIS
 
@@ -325,6 +337,16 @@ R2M::Talaria -- core Talaria routines.
 
 =item *
 
+B<incoming>
+
+=item *
+
+B<outgoing>
+
+=item *
+
+B<archive>
+
 =back
 
 =head1 DEPENDENCIES
@@ -332,5 +354,19 @@ R2M::Talaria -- core Talaria routines.
 =over
 
 =item *
+
+DBI
+
+=item *
+
+R2M::Crypt
+
+=item *
+
+R2M::Parse
+
+=item *
+
+=R2M::Mail
 
 =back

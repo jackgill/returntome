@@ -44,6 +44,8 @@ use_ok('R2M::Talaria') or exit;
 my $conf_file  = 'conf/talaria.conf';
 my $key = 'foo';
 my $conf = read_conf($conf_file, $key);
+$conf->{general}->{cwd} = $ENV{PWD};
+
 my $dbh = connect_db($conf);
 
 #Clear DB

@@ -54,6 +54,9 @@ my $key = get_checked_key($key_digest);
 #Configuration options represented as Config::Tiny object
 my $conf = read_conf($conf_file, $key);
 
+#Add CWD to conf hash
+$conf->{general}->{cwd} = $cwd;
+
 #daemonize
 Proc::Daemon::Init();
 
@@ -89,7 +92,6 @@ else {
     $logger->error("Couldn't create PID file: $!");
 }
 
-
 my $working = 0; #flag indicating if daemon is executing subroutine
 my $TERM    = 0; #flag indicating if SIGTERM has been received
 my $HUP     = 0; #flag indicating if SIGHUP has been received
@@ -97,9 +99,10 @@ my $HUP     = 0; #flag indicating if SIGHUP has been received
 #SIGTERM commands a graceful shutdown
 $SIG{TERM} = sub {
     if ($working) { #daemon is currently executing subroutine
-        $TERM = 1;  #set flag, daemon will exit when subroutine is done executing
+        #set flag, daemon will exit when subroutine is done executing
+        $TERM = 1;
     }
-    else { #daemon is sleeping
+    else {          #daemon is sleeping
         quit();
     }
 };
@@ -117,12 +120,12 @@ $SIG{HUP}  = sub {
 #daemon should never receive SIGINT, but just to be safe...
 $SIG{INT} = 'IGNORE';
 
-#DB handle is global so that quit() can disconnect it:
+#DB handle is global so that quit() can disconnect it
 my $dbh;
 
 #Main loop:
 while (1) {
-    #Set flag to indicate subroutine processing
+    #Set flag to indicate subroutine is currently processing
     $working = 1;
 
     #Connect to DB
@@ -144,7 +147,7 @@ while (1) {
         $logger->error("Could not connect to DB: " . $DBI::errstr);
     }
 
-    #clear flag to indicate subroutine processing
+    #clear flag which indicates subroutine is currently processing
     $working = 0;
 
     #check to see if SIGTERM was received while subroutine was processing
@@ -201,9 +204,11 @@ B<outgoing> - retrieve messages from database, send them to SMTP server.
 
 =item *
 
-B<archive> - move sent messages from main tables to archive table, delete old archived messages.
+B<archive> - move sent messages from main tables to archive table, delete old archived messages, produce daily report.
 
 =back
+
+See the R2M::Talaria documentation for details.
 
 =head1 DEPENDENCIES
 
