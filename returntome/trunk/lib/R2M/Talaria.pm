@@ -182,6 +182,7 @@ sub outgoing {
     }
 }
 
+#TODO: these log files are beingh held in memory. Check log file modification time stamp instead?
 my $old_incoming = "";
 my $old_outgoing = "";
 my $old_archive  = "";
@@ -255,11 +256,11 @@ $archive_log
 END_REPORT
 
         #Send report
-        mailAdmin($conf, 'Talaria: ' . from_epoch(time) . " R: $received S: $sent $new_log", $report);
+        mailAdmin($conf, "Talaria: R: $received S: $sent $new_log", $report);
     };
     if ($@) {
         $logger->error($@);
-        mailAdmin($conf, 'Talaria: ' . from_epoch(time) . " Error preparing report: $@");
+        mailAdmin($conf, "Talaria: Error preparing report: $@");
     }
     #TODO: database maintainance
 }
